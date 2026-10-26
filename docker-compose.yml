@@ -1,0 +1,29 @@
+# Captr mit Freistellen. Alles bleibt im eigenen Netz: rembg laedt sein Modell
+# beim ersten Freistellen einmal herunter und behaelt es im Volume.
+services:
+  captr:
+    build: .
+    image: captr:latest
+    restart: unless-stopped
+    ports:
+      - "8320:8080"
+    environment:
+      CAPTR_REMBG: http://rembg:7000
+      CAPTR_REMBG_MODELL: isnet-general-use
+      # leer lassen fuer offenen Zugang im Heimnetz
+      CAPTR_KENNWORT: ${CAPTR_KENNWORT:-}
+    volumes:
+      - captr-daten:/daten
+    depends_on:
+      - rembg
+
+  rembg:
+    image: danielgatis/rembg:2.0.86
+    command: ["s", "--host", "0.0.0.0", "--port", "7000", "--no-ui"]
+    restart: unless-stopped
+    volumes:
+      - rembg-modelle:/root/.u2net
+
+volumes:
+  captr-daten:
+  rembg-modelle:

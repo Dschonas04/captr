@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "allowImportingTsExtensions": true,
+    "types": ["vite/client"],
+    "paths": {
+      "@storyteller/common": ["./src/leinwand/shims/common.ts"],
+      "@storyteller/icons": ["./src/leinwand/shims/icons.tsx"],
+      "@storyteller/keybinds": ["./src/leinwand/shims/keybinds.ts"],
+      "@storyteller/ui-tooltip": ["./src/leinwand/shims/tooltip.tsx"],
+      "@storyteller/ui-action-reminder-modal": ["./src/leinwand/shims/action-reminder.tsx"]
+    }
+  },
+  "include": ["src"]
+}

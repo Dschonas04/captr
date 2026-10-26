@@ -1,0 +1,39 @@
+Captr
+Copyright 2026 Jonas Groll
+
+Lizenziert unter der Apache License, Version 2.0 (siehe LICENSE).
+
+------------------------------------------------------------------------------
+ArtCraft
+
+Die Leinwand (frontend/src/leinwand/artcraft/) stammt aus ArtCraft,
+https://github.com/storytold/artcraft, Verzeichnis frontend/libs/components/pagedraw.
+
+  Copyright (c) 2026 ArtCraft Team and the ArtCraft contributors.
+  Licensed under the MIT License or the Apache License, Version 2.0, at your option.
+
+Captr nutzt diese Dateien unter der Apache License 2.0. Jede Datei nennt im
+Kopf ihre Herkunft und ob sie geändert wurde. Geändert wurden:
+
+  PaintSurface.tsx         leere Leinwand zeigt die Hintergrundfarbe; zwei
+                           Typumwandlungen für TypeScript 7
+  components/ui/SideToolbar.tsx   deutsche Beschriftung, Maskenwerkzeug entfernt
+  components/ui/ContextMenu.tsx   deutsche Beschriftung
+  utilities/render3DModel.ts      auf den Typ Model3DParams reduziert
+
+Die übrigen übernommenen Dateien sind unverändert. Die ArtCraft-internen
+Pakete (@storyteller/*) ersetzt Captr durch eigene, kleine Nachbauten unter
+frontend/src/leinwand/shims/.
+
+Name, Wortmarke und Logos von ArtCraft sind Marken des ArtCraft-Teams und
+nicht Teil der Lizenz; Captr verwendet sie nicht.
+
+------------------------------------------------------------------------------
+Zur Laufzeit genutzt, nicht mitgeliefert
+
+LibRaw (dcraw_emu)    LGPL 2.1 / CDDL 1.0   https://www.libraw.org
+ExifTool              Artistic / GPL        https://exiftool.org
+libheif               LGPL 3.0              https://github.com/strukturag/libheif
+rembg                 MIT                   https://github.com/danielgatis/rembg
+
+Schrift: Instrument Sans, SIL Open Font License 1.1.

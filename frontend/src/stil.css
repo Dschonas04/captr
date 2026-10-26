@@ -1,0 +1,129 @@
+@import "tailwindcss";
+@import "@fontsource-variable/instrument-sans";
+
+/* Dunkelkammer: neutrales Grau, damit nichts die Farben im Bild verfaelscht,
+   und ein bernsteinfarbenes Schutzlicht als einzige Akzentfarbe. */
+@theme {
+  --font-sans: "Instrument Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", monospace;
+
+  --color-grund: #121212;
+  --color-flaeche: #1a1a1a;
+  --color-feld: #222222;
+  --color-feld-hell: #2b2b2b;
+  --color-linie: #2f2f2f;
+  --color-text: #e6e3de;
+  --color-text-2: #a19d97;
+  --color-text-3: #6d6a66;
+  --color-licht: #e0a84a;
+  --color-licht-hell: #f0c071;
+  --color-gefahr: #e26a5a;
+
+  /* Namen, die die ArtCraft-Leinwand erwartet */
+  --color-primary: #e0a84a;
+  --color-ui-panel: #1e1e1e;
+  --color-ui-panel-border: #333333;
+  --color-ui-controls: #2b2b2b;
+  --color-ui-background: #141414;
+  --color-base-fg: #e6e3de;
+  --color-red: #e26a5a;
+}
+
+@utility glass {
+  background-color: rgb(30 30 30 / 0.86);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgb(255 255 255 / 0.07);
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-grund);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  color-scheme: dark;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #3a3a3a transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-licht);
+  outline-offset: 2px;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+.zahl {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Regler: schmale Spur, die Mitte markiert, Griff als Kreis */
+input[type="range"].regler {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 18px;
+  background: transparent;
+  margin: 0;
+}
+
+input[type="range"].regler::-webkit-slider-runnable-track {
+  height: 2px;
+  background: var(--spur, #3a3a3a);
+  border-radius: 1px;
+}
+
+input[type="range"].regler::-moz-range-track {
+  height: 2px;
+  background: var(--spur, #3a3a3a);
+  border-radius: 1px;
+}
+
+input[type="range"].regler::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 11px;
+  height: 11px;
+  margin-top: -4.5px;
+  border-radius: 50%;
+  background: #cfcac3;
+  border: none;
+  transition: transform 0.1s;
+}
+
+input[type="range"].regler::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #cfcac3;
+  border: none;
+}
+
+input[type="range"].regler:hover::-webkit-slider-thumb,
+input[type="range"].regler:active::-webkit-slider-thumb {
+  background: var(--color-licht-hell);
+  transform: scale(1.15);
+}
+
+input[type="range"].regler:focus-visible {
+  outline: none;
+}
+
+input[type="range"].regler:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px rgb(224 168 74 / 0.4);
+}
