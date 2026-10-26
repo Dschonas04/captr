@@ -1,5 +1,5 @@
 # Oberflaeche bauen
-FROM node:24-alpine AS oberflaeche
+FROM node:26-alpine AS oberflaeche
 WORKDIR /bau/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --no-fund --no-audit
