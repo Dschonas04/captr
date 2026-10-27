@@ -34,6 +34,9 @@ type Pixel struct {
 	D    []uint16
 }
 
+// Obergrenze je Bild; 200 Megapixel sind 1,2 GB im Speicher.
+const maxBildpunkte = 200_000_000
+
 var rawEndungen = map[string]bool{
 	".cr2": true, ".cr3": true, ".crw": true, ".nef": true, ".nrw": true, ".arw": true, ".srf": true,
 	".sr2": true, ".dng": true, ".raf": true, ".orf": true, ".rw2": true, ".pef": true, ".srw": true,
@@ -169,7 +172,7 @@ func lesePPM(r *bufio.Reader) (*Pixel, error) {
 		}
 	}
 	b, h, maxwert := zahlen[0], zahlen[1], zahlen[2]
-	if b <= 0 || h <= 0 || b*h > 200_000_000 || maxwert <= 0 || maxwert > 65535 {
+	if b <= 0 || h <= 0 || int64(b)*int64(h) > maxBildpunkte || maxwert <= 0 || maxwert > 65535 {
 		return nil, fmt.Errorf("unplausibles PPM %dx%d/%d", b, h, maxwert)
 	}
 	p := &Pixel{B: b, H: h, D: make([]uint16, b*h*3)}
@@ -204,6 +207,18 @@ func leseBilddatei(pfad string, ausrichtung int) (*Pixel, error) {
 		return nil, err
 	}
 	defer f.Close()
+	// Erst die Groesse lesen: eine kleine Datei kann sich zu Gigabytes
+	// aufblaehen, und ausBild braucht 6 Byte je Bildpunkt.
+	cfg, _, err := image.DecodeConfig(bufio.NewReader(f))
+	if err != nil {
+		return nil, fmt.Errorf("Bild nicht lesbar: %w", err)
+	}
+	if cfg.Width <= 0 || cfg.Height <= 0 || int64(cfg.Width)*int64(cfg.Height) > maxBildpunkte {
+		return nil, fmt.Errorf("Bild zu groß (%d × %d)", cfg.Width, cfg.Height)
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return nil, err
+	}
 	img, _, err := image.Decode(bufio.NewReaderSize(f, 1<<20))
 	if err != nil {
 		return nil, fmt.Errorf("Bild nicht lesbar: %w", err)

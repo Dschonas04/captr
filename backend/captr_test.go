@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"encoding/binary"
 	"encoding/json"
+	"hash/crc32"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -14,6 +15,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -229,6 +231,39 @@ func TestLeinwand(t *testing.T) {
 	_ = json.NewDecoder(res.Body).Decode(&l)
 	if l.Name != "Neu" || l.Szene != `{"a":1}` {
 		t.Fatalf("Laden: %+v", l)
+	}
+}
+
+func TestHerkunft(t *testing.T) {
+	_, s := testDienst(t)
+	req, _ := http.NewRequest(http.MethodDelete, s.URL+"/api/vorlagen/0123456789abcdef", nil)
+	req.Header.Set("Origin", "http://boese.example")
+	if res, _ := http.DefaultClient.Do(req); res.StatusCode != http.StatusForbidden {
+		t.Fatalf("fremde Herkunft: %d", res.StatusCode)
+	}
+	req, _ = http.NewRequest(http.MethodDelete, s.URL+"/api/vorlagen/0123456789abcdef", nil)
+	req.Header.Set("Origin", s.URL)
+	if res, _ := http.DefaultClient.Do(req); res.StatusCode != http.StatusOK {
+		t.Fatalf("eigene Herkunft: %d", res.StatusCode)
+	}
+}
+
+func TestRiesenbild(t *testing.T) {
+	// nur ein PNG-Kopf, der 30000 x 30000 Pixel behauptet
+	ihdr := []byte("IHDR")
+	ihdr = binary.BigEndian.AppendUint32(ihdr, 30000)
+	ihdr = binary.BigEndian.AppendUint32(ihdr, 30000)
+	ihdr = append(ihdr, 8, 0, 0, 0, 0)
+	daten := []byte("\x89PNG\r\n\x1a\n")
+	daten = binary.BigEndian.AppendUint32(daten, 13)
+	daten = append(daten, ihdr...)
+	daten = binary.BigEndian.AppendUint32(daten, crc32.ChecksumIEEE(ihdr))
+	pfad := t.TempDir() + "/riese.png"
+	if err := os.WriteFile(pfad, daten, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := leseBilddatei(pfad, 1); err == nil || !strings.Contains(err.Error(), "zu groß") {
+		t.Fatalf("Riesenbild nicht abgewiesen: %v", err)
 	}
 }
 

@@ -16,10 +16,12 @@ import (
 	"log"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	_ "image/png"
@@ -42,7 +44,13 @@ func (d *Dienst) Wege(web fs.FS) http.Handler {
 	m := http.NewServeMux()
 
 	m.HandleFunc("GET /api/status", d.status)
-	m.HandleFunc("POST /api/anmelden", d.anmelden)
+	m.HandleFunc("POST /api/anmelden", func(w http.ResponseWriter, r *http.Request) {
+		if !gleicheHerkunft(r) {
+			fehler(w, http.StatusForbidden, "fremde Herkunft")
+			return
+		}
+		d.anmelden(w, r)
+	})
 
 	m.HandleFunc("GET /api/bilder", d.geschuetzt(d.bilder))
 	m.HandleFunc("POST /api/bilder", d.geschuetzt(d.hochladen))
@@ -116,12 +124,47 @@ func protokoll(n http.Handler) http.Handler {
 // gedacht. Mit Kennwort verlangt jede Schnittstelle das Merkmal.
 func (d *Dienst) geschuetzt(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !gleicheHerkunft(r) {
+			fehler(w, http.StatusForbidden, "fremde Herkunft")
+			return
+		}
 		if d.kennwort == "" || d.erlaubt(r) {
 			h(w, r)
 			return
 		}
+		if r.Header.Get("X-Captr") != "" {
+			bremse() // falsches Kennwort im Kopf: genauso muehsam wie bei der Anmeldung
+		}
 		fehler(w, http.StatusUnauthorized, "anmelden")
 	}
+}
+
+// gleicheHerkunft weist schreibende Anfragen fremder Seiten ab. Ohne
+// Kennwort koennte sonst jede Webseite, die jemand im Heimnetz oeffnet,
+// Bilder loeschen oder hochladen.
+func gleicheHerkunft(r *http.Request) bool {
+	if r.Method == http.MethodGet || r.Method == http.MethodHead {
+		return true
+	}
+	if r.Header.Get("Sec-Fetch-Site") == "cross-site" {
+		return false
+	}
+	herkunft := r.Header.Get("Origin")
+	if herkunft == "" {
+		return true // Skripte und curl schicken keine
+	}
+	u, err := url.Parse(herkunft)
+	return err == nil && strings.EqualFold(u.Host, r.Host)
+}
+
+// Fehlversuche laufen nacheinander durch eine Sekunde Wartezeit, auch wenn
+// jemand viele Anfragen gleichzeitig schickt.
+var rateSperre sync.Mutex
+
+func bremse() {
+	rateSperre.Lock()
+	time.Sleep(time.Second)
+	rateSperre.Unlock()
 }
 
 // Skripte schicken das Kennwort in X-Captr, der Browser einen Keks mit einem
@@ -155,7 +198,7 @@ func (d *Dienst) anmelden(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if d.kennwort == "" || !gleich(rumpf.Kennwort, d.kennwort) {
-		time.Sleep(time.Second) // Raten soll muehsam sein
+		bremse() // Raten soll muehsam sein
 		fehler(w, http.StatusUnauthorized, "falsches Kennwort")
 		return
 	}
