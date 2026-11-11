@@ -1,5 +1,7 @@
 # Captr
 
+<img src="docs/logo.svg" alt="" width="96" align="right">
+
 Fotos sammeln, entwickeln und zusammensetzen – im Browser, auf dem eigenen
 Server. Ähnlich wie Lightroom, nur ohne Abo und ohne Cloud.
 
