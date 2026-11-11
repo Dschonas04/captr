@@ -1,8 +1,10 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { api, type Status } from "./api";
+import { api, sso, type SSOStatus, type Status } from "./api";
+import { SSODialog } from "./sso";
+import { Settings } from "lucide-react";
 import Bibliothek from "./bibliothek/Bibliothek";
 import Entwickeln from "./entwickeln/Entwickeln";
-import { Knopf, Laedt, Meldungen, Rueckfragen, cx, eingabe } from "./ui";
+import { Knopf, Laedt, Meldungen, Rueckfragen, SymbolKnopf, cx, eingabe } from "./ui";
 
 // Konva und die Leinwand erst laden, wenn jemand sie oeffnet
 const Leinwaende = lazy(() => import("./leinwand/Leinwaende"));
@@ -61,10 +63,13 @@ function Logo() {
 export default function App() {
   const weg = useWeg();
   const [status, setStatus] = useState<Status | null>(null);
+  const [ssoStatus, setSsoStatus] = useState<SSOStatus | null>(null);
+  const [einstellungen, setEinstellungen] = useState(false);
 
   const pruefe = () => api.status().then(setStatus, () => setStatus({ kennwort: false, angemeldet: true, freistellen: false }));
   useEffect(() => {
     void pruefe();
+    sso.status().then(setSsoStatus, () => {});
     const h = () => setStatus((s) => (s ? { ...s, angemeldet: false } : s));
     window.addEventListener("captr:anmelden", h);
     return () => window.removeEventListener("captr:anmelden", h);
@@ -113,7 +118,21 @@ export default function App() {
             </a>
           ))}
         </nav>
+        <div className="ml-auto flex items-center gap-2">
+          {ssoStatus?.nutzer && (
+            <span className="text-[12px] text-text-3">
+              {ssoStatus.nutzer.name || ssoStatus.nutzer.nutzer} ·{" "}
+              <a className="hover:text-text-2" href="/sso/abmelden">
+                Abmelden
+              </a>
+            </span>
+          )}
+          <SymbolKnopf onClick={() => setEinstellungen(true)} aria-label="Einstellungen" title="Einstellungen">
+            <Settings size={16} />
+          </SymbolKnopf>
+        </div>
       </header>
+      {einstellungen && <SSODialog status={ssoStatus} onSchliessen={() => setEinstellungen(false)} />}
       <main className="min-h-0 flex-1">
         <Suspense
           fallback={

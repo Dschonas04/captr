@@ -38,6 +38,7 @@ type Dienst struct {
 	rembg     string
 	rembgNetz string
 	kennwort  string
+	sso       *SSO
 }
 
 func (d *Dienst) Wege(web fs.FS) http.Handler {
@@ -51,6 +52,8 @@ func (d *Dienst) Wege(web fs.FS) http.Handler {
 		}
 		d.anmelden(w, r)
 	})
+
+	d.sso.Wege(m, d.geschuetzt)
 
 	m.HandleFunc("GET /api/bilder", d.geschuetzt(d.bilder))
 	m.HandleFunc("POST /api/bilder", d.geschuetzt(d.hochladen))
@@ -80,7 +83,7 @@ func (d *Dienst) Wege(web fs.FS) http.Handler {
 	m.HandleFunc("DELETE /api/vorlagen/{id}", d.geschuetzt(d.vorlageLoeschen))
 
 	m.Handle("/", seite(web))
-	return protokoll(m)
+	return protokoll(d.sso.Schutz(m))
 }
 
 // ---------- Rahmen ----------
@@ -170,6 +173,9 @@ func bremse() {
 // Skripte schicken das Kennwort in X-Captr, der Browser einen Keks mit einem
 // davon abgeleiteten Merkmal -- nie das Kennwort selbst.
 func (d *Dienst) erlaubt(r *http.Request) bool {
+	if _, ok := d.sso.Wer(r); ok && d.sso.An() {
+		return true
+	}
 	if gleich(r.Header.Get("X-Captr"), d.kennwort) {
 		return true
 	}

@@ -49,6 +49,12 @@ func main() {
 		rembgNetz: umgebung("CAPTR_REMBG_MODELL", "isnet-general-use"),
 		kennwort:  os.Getenv("CAPTR_KENNWORT"),
 	}
+	d.sso = NeuesSSO("Captr", filepath.Join(daten, "sso.json"), "CAPTR_SSO_AUS")
+	// Die Zustandsabfrage braucht der Gesundheitscheck des Containers.
+	d.sso.Frei = []string{"/api/status"}
+	d.sso.Durchlass = func(r *http.Request) bool {
+		return d.kennwort != "" && gleich(r.Header.Get("X-Captr"), d.kennwort)
+	}
 
 	adresse := ":" + umgebung("PORT", "8080")
 	server := &http.Server{

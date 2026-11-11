@@ -66,6 +66,9 @@ async function anfrage<T>(weg: string, init?: RequestInit): Promise<T> {
     let text = res.statusText;
     try {
       const j = await res.json();
+      if (res.status === 401 && typeof j.sso === "string") {
+        location.href = j.sso + "?ziel=" + encodeURIComponent("/" + location.hash);
+      }
       text = typeof j.fehler === "string" ? j.fehler : Array.isArray(j.fehler) ? j.fehler.join(", ") : text;
     } catch {
       /* kein JSON */
@@ -220,3 +223,37 @@ export function formatiereDatum(s: string): string {
   if (isNaN(d.getTime())) return "";
   return d.toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
+
+// ---------- SSO ----------
+
+export interface SSOKonfig {
+  aktiv: boolean;
+  aussteller: string;
+  clientId: string;
+  adresse: string;
+  erlaubt: string;
+}
+export interface SSOStand {
+  einstellung: SSOKonfig;
+  geheimnisDa: boolean;
+  rueckweg: string;
+  abmeldeweg: string;
+  notaus: boolean;
+}
+export interface SSOStatus {
+  aktiv: boolean;
+  angemeldet: boolean;
+  nutzer?: { name: string; nutzer: string; email: string };
+}
+export const sso = {
+  status: () => anfrage<SSOStatus>("/api/sso/status"),
+  lesen: () => anfrage<SSOStand>("/api/sso/einstellungen"),
+  speichern: (k: SSOKonfig & { geheimnis: string }) =>
+    anfrage<SSOStand>("/api/sso/einstellungen", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(k) }),
+  testen: (aussteller: string) =>
+    anfrage<{ ok: boolean; meldung: string }>("/api/sso/testen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ aussteller }),
+    }),
+};

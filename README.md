@@ -52,6 +52,15 @@ Captr läuft dann auf Port 8320. Die Daten liegen im Volume `captr-daten`.
 Der Browser braucht WebGL2 mit `EXT_color_buffer_float` – das können alle
 aktuellen Desktop-Browser.
 
+## Anmeldung per SSO
+
+Über das Zahnrad oben rechts lässt sich ein OpenID-Connect-Anbieter wie
+Keycloak eintragen: Aussteller-URL, Client-ID, Client-Geheimnis und auf Wunsch
+die erlaubten Konten. Beim Anbieter wird `https://<captr>/sso/zurueck` als
+Weiterleitung eingetragen. Ist SSO an, kommt nur noch herein, wer sich dort
+anmeldet; Skripte mit `X-Captr` gehen weiter. Die Einstellung liegt in
+`sso.json` im Datenordner, `CAPTR_SSO_AUS=1` schaltet SSO im Notfall ab.
+
 ## Entwickeln
 
 ```sh
