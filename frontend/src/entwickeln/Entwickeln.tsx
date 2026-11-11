@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ArrowLeft,
-  ChevronDown,
+  ClipboardPaste,
   Columns2,
   Copy,
   Crop,
@@ -17,7 +17,9 @@ import {
   X,
 } from "lucide-react";
 import { api, formatiereBelichtung, ladePixel, miniUrl, vorschauUrl, type Bild, type Vorlage } from "../api";
-import { useBibliothek } from "../bibliothek/speicher";
+import { sichtbar, useBibliothek } from "../bibliothek/speicher";
+import { sammlungName } from "../bibliothek/Bibliothek";
+import { Filmstreifen, HistogrammPanel, Navigator, Panel, Seitenleiste, exifTeile, useLeistenTasten } from "../lr";
 import { Dialog, Feld, Knopf, Laedt, Regler, Sterne, SymbolKnopf, cx, eingabe, frage, melde } from "../ui";
 import {
   FARBBEREICHE,
@@ -25,6 +27,7 @@ import {
   ausgabeGroesse,
   begrenzeZuschnitt,
   gedrehteGroesse,
+  beschreibe,
   istStandard,
   ohneGeometrie,
   standard,
@@ -48,38 +51,8 @@ const EINGEBAUT: { name: string; e: Partial<Einstellungen> }[] = [
   { name: "Film", e: { kontrast: 10, lichter: -25, tiefen: 20, saettigung: -12, koernung: 25, vignette: -18, kurven: { rgb: [[0, 0.05], [0.25, 0.22], [0.75, 0.8], [1, 0.96]], r: [[0, 0], [1, 1]], g: [[0, 0], [1, 1]], b: [[0, 0.04], [1, 0.97]] } } },
 ];
 
-function Abschnitt({ titel, children, offen: anfangOffen = true, rechts }: { titel: string; children: ReactNode; offen?: boolean; rechts?: ReactNode }) {
-  const [offen, setOffen] = useState(() => {
-    try {
-      const w = localStorage.getItem("captr-abschnitt-" + titel);
-      return w === null ? anfangOffen : w === "1";
-    } catch {
-      return anfangOffen;
-    }
-  });
-  return (
-    <section className="border-b border-linie">
-      <div className="flex items-center">
-        <button
-          className="flex h-10 flex-1 items-center gap-2 px-4 text-left text-[12px] font-semibold uppercase tracking-[0.08em] text-text-2 hover:text-text"
-          onClick={() => {
-            setOffen(!offen);
-            try {
-              localStorage.setItem("captr-abschnitt-" + titel, offen ? "0" : "1");
-            } catch {
-              /* egal */
-            }
-          }}
-          aria-expanded={offen}
-        >
-          <ChevronDown size={13} className={cx("transition-transform", !offen && "-rotate-90")} />
-          {titel}
-        </button>
-        {rechts && <div className="pr-3">{rechts}</div>}
-      </div>
-      {offen && <div className="px-4 pb-4">{children}</div>}
-    </section>
-  );
+function Abschnitt(p: { titel: string; children: ReactNode; offen?: boolean; rechts?: ReactNode }) {
+  return <Panel {...p} seite="rechts" />;
 }
 
 // ---------- Zuschnitt-Ebene ----------
@@ -337,15 +310,19 @@ function Vorlagen({ anwenden, aktuell }: { anwenden: (e: Partial<Einstellungen>)
   useEffect(() => {
     api.vorlagen().then(setEigene, () => {});
   }, []);
-  const zeile = "flex w-full items-center rounded px-2 py-1.5 text-left text-[12.5px] text-text-2 hover:bg-white/5 hover:text-text";
+  const zeile = "flex w-full items-center rounded-[2px] px-2 py-[5px] text-left text-[12.5px] text-text-2 hover:bg-white/[0.04] hover:text-text";
   return (
-    <div className="p-3">
-      <div className="mb-1 flex items-center justify-between px-2">
-        <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-text-3">Vorlagen</h3>
-        <SymbolKnopf className="h-6 w-6" title="Aktuelle Einstellungen als Vorlage sichern" onClick={() => setNeu("")}>
+    <Panel
+      titel="Vorgaben"
+      seite="links"
+      rechts={
+        <SymbolKnopf className="h-6 w-6" title="Aktuelle Einstellungen als Vorgabe sichern" onClick={() => setNeu("")}>
           <Plus size={14} />
         </SymbolKnopf>
-      </div>
+      }
+    >
+      <div className="mb-0.5 px-2 text-[11px] text-text-3">Eigene</div>
+      {eigene.length === 0 && <p className="px-2 pb-1 text-[11.5px] text-text-3/80">Mit + sichern</p>}
       {eigene.map((v) => (
         <div key={v.id} className="group flex items-center">
           <button className={zeile} onClick={() => anwenden(v.einstellungen)}>
@@ -363,7 +340,7 @@ function Vorlagen({ anwenden, aktuell }: { anwenden: (e: Partial<Einstellungen>)
           </button>
         </div>
       ))}
-      {eigene.length > 0 && <div className="mx-2 my-2 h-px bg-linie" />}
+      <div className="mb-0.5 mt-2 px-2 text-[11px] text-text-3">Captr</div>
       {EINGEBAUT.map((v) => (
         <button key={v.name} className={zeile} onClick={() => anwenden(v.e)}>
           {v.name}
@@ -398,13 +375,45 @@ function Vorlagen({ anwenden, aktuell }: { anwenden: (e: Partial<Einstellungen>)
           </form>
         </Dialog>
       )}
-    </div>
+    </Panel>
+  );
+}
+
+// ---------- Protokoll ----------
+
+function Protokoll({ liste, i, onWaehlen }: { liste: string[]; i: number; onWaehlen: (i: number) => void }) {
+  const eintraege = useMemo(() => {
+    const e = liste.map((x) => vervollstaendige(JSON.parse(x)));
+    return e.map((neu, n) => (n === 0 ? "Geöffnet" : beschreibe(e[n - 1], neu)));
+  }, [liste]);
+  return (
+    <Panel titel="Protokoll" seite="links">
+      <div className="max-h-64 overflow-y-auto">
+        {eintraege
+          .map((t, n) => [t, n] as const)
+          .reverse()
+          .map(([t, n]) => (
+            <button
+              key={n}
+              onClick={() => onWaehlen(n)}
+              className={cx(
+                "flex w-full items-center rounded-[2px] px-2 py-[4px] text-left text-[12px]",
+                n === i ? "bg-[#3d3d3d] text-text" : n > i ? "text-text-3 hover:bg-white/[0.04]" : "text-text-2 hover:bg-white/[0.04] hover:text-text",
+              )}
+            >
+              <span className="truncate">{t}</span>
+            </button>
+          ))}
+      </div>
+    </Panel>
   );
 }
 
 // ---------- Seite ----------
 
 let zwischenablage: Partial<Einstellungen> | null = null;
+// Einstellungen des zuletzt bearbeiteten Fotos, für "Vorherige"
+let vorherige: { id: string; e: Partial<Einstellungen> } | null = null;
 
 export default function Entwickeln({ id }: { id: string }) {
   const { bilder, ersetze, laden: bibliothekLaden, geladen, aendere } = useBibliothek();
@@ -421,6 +430,11 @@ export default function Entwickeln({ id }: { id: string }) {
   const [exportieren, setExportieren] = useState(false);
   const [hslArt, setHslArt] = useState<"farbton" | "farbsaettigung" | "farbluminanz">("farbton");
   const [flaeche, setFlaeche] = useState<[number, number]>([800, 600]);
+  const [info, setInfo] = useState(true);
+  const [, setProtokollStand] = useState(0);
+  const sammlung = useBibliothek((s) => s.sammlung);
+  const liste = useMemo(() => sichtbar(bilder, sammlung), [bilder, sammlung]);
+  useLeistenTasten();
 
   const canvas = useRef<HTMLCanvasElement>(null);
   const ansichtRef = useRef<HTMLDivElement>(null);
@@ -548,6 +562,7 @@ export default function Entwickeln({ id }: { id: string }) {
       const einst = vervollstaendige(b.einstellungen);
       setE(einst);
       verlauf.current = { liste: [JSON.stringify(einst)], i: 0 };
+      setProtokollStand((n) => n + 1);
       try {
         const px = await ladePixel(id, VORSCHAU_MAX, ctrl.signal);
         if (abbruch || nr !== ladeNr.current || !entw.current) return;
@@ -562,6 +577,8 @@ export default function Entwickeln({ id }: { id: string }) {
     return () => {
       abbruch = true;
       ctrl.abort();
+      // fuer "Vorherige" beim naechsten Foto
+      if (!istStandard(eRef.current)) vorherige = { id, e: ohneGeometrie(eRef.current) };
     };
   }, [id, speichereJetzt]);
 
@@ -630,6 +647,7 @@ export default function Entwickeln({ id }: { id: string }) {
         if (v.liste[v.i] !== s) {
           v.liste = [...v.liste.slice(0, v.i + 1), s].slice(-200);
           v.i = v.liste.length - 1;
+          setProtokollStand((n) => n + 1);
         }
       }
     },
@@ -646,9 +664,11 @@ export default function Entwickeln({ id }: { id: string }) {
       const neu = vervollstaendige(JSON.parse(v.liste[i]));
       setE(neu);
       merke(neu);
+      setProtokollStand((n) => n + 1);
     },
     [merke],
   );
+  const springe = useCallback((i: number) => schritt((i - verlauf.current.i) as -1 | 1), [schritt]);
 
   const regler = (name: string, k: keyof Einstellungen, min = -100, max = 100, extra: Partial<Parameters<typeof Regler>[0]> = {}) => (
     <Regler
@@ -693,11 +713,12 @@ export default function Entwickeln({ id }: { id: string }) {
 
   // ---------- Navigation ----------
 
-  const index = bilder.findIndex((b) => b.id === id);
+  const index = liste.findIndex((b) => b.id === id);
   const geheZu = useCallback((r: number) => {
-    const liste = useBibliothek.getState().bilder;
-    const i = liste.findIndex((b) => b.id === id);
-    const n = liste[i + r];
+    const st = useBibliothek.getState();
+    const l = sichtbar(st.bilder, st.sammlung);
+    const i = l.findIndex((b) => b.id === id);
+    const n = l[i + r];
     if (n) location.hash = `#/entwickeln/${n.id}`;
   }, [id]);
 
@@ -730,6 +751,7 @@ export default function Entwickeln({ id }: { id: string }) {
       }
       if (mod || ev.altKey) return;
       if (k === "\\") setVorher((v) => !v);
+      else if (k === "i") setInfo((v) => !v);
       else if (k === "r") setZuschneiden((z) => !z);
       else if (k === "z" || k === " ") {
         ev.preventDefault();
@@ -753,60 +775,53 @@ export default function Entwickeln({ id }: { id: string }) {
 
   return (
     <div className="flex h-full min-h-0">
-      {/* Vorlagen */}
-      <aside className="hidden w-[210px] shrink-0 overflow-y-auto border-r border-linie bg-flaeche xl:block">
+      <Seitenleiste
+        seite="links"
+        breite={250}
+        fuss={
+          <div className="flex gap-1.5">
+            <Knopf
+              art="rahmen"
+              className="h-7 flex-1 px-2 text-[12px]"
+              title="Einstellungen kopieren (Strg+Umschalt+C)"
+              onClick={() => {
+                zwischenablage = ohneGeometrie(e);
+                melde("Einstellungen kopiert – mit „Einfügen“ oder Strg+Umschalt+V übertragen");
+              }}
+            >
+              <Copy size={13} /> Kopieren …
+            </Knopf>
+            <Knopf
+              art="rahmen"
+              className="h-7 flex-1 px-2 text-[12px]"
+              title="Einstellungen einfügen (Strg+Umschalt+V)"
+              disabled={!zwischenablage}
+              onClick={() => zwischenablage && anwenden(zwischenablage)}
+            >
+              <ClipboardPaste size={13} /> Einfügen
+            </Knopf>
+          </div>
+        }
+      >
+        <Navigator
+          bild={aktuell}
+          rechts={
+            <div className="flex items-center gap-2 text-[11px]">
+              <button className={!lupe ? "text-text" : "text-text-3 hover:text-text-2"} onClick={() => setLupe(false)}>
+                Einpassen
+              </button>
+              <button className={lupe ? "text-text" : "text-text-3 hover:text-text-2"} onClick={() => setLupe(true)}>
+                1:1
+              </button>
+            </div>
+          }
+        />
         <Vorlagen anwenden={anwenden} aktuell={e} />
-      </aside>
+        <Protokoll liste={verlauf.current.liste} i={verlauf.current.i} onWaehlen={springe} />
+      </Seitenleiste>
 
       {/* Bild */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex h-11 shrink-0 items-center gap-1 border-b border-linie px-3">
-          <a href="#/" className="mr-1">
-            <SymbolKnopf title="Zur Bibliothek (G)" aria-label="Zur Bibliothek">
-              <ArrowLeft size={16} />
-            </SymbolKnopf>
-          </a>
-          <div className="mr-auto min-w-0 truncate text-[13px] text-text-2" title={bild?.name}>
-            <span className="text-text">{bild?.name}</span>
-            {bild && (
-              <span className="ml-3 hidden text-text-3 md:inline">
-                {[bild.kamera, bild.brennweite ? `${Math.round(bild.brennweite)} mm` : "", bild.blende ? `f/${bild.blende}` : "", formatiereBelichtung(bild.belichtungszeit), bild.iso ? `ISO ${bild.iso}` : ""]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </span>
-            )}
-          </div>
-          {aktuell && (
-            <div className="mr-2 hidden sm:block">
-              <Sterne wert={aktuell.bewertung} onChange={(v) => aendere([aktuell.id], { bewertung: v })} />
-            </div>
-          )}
-          <SymbolKnopf title="Rückgängig (Strg+Z)" aria-label="Rückgängig" onClick={() => schritt(-1)}>
-            <Undo2 size={16} />
-          </SymbolKnopf>
-          <SymbolKnopf title="Wiederholen (Strg+Umschalt+Z)" aria-label="Wiederholen" onClick={() => schritt(1)}>
-            <Redo2 size={16} />
-          </SymbolKnopf>
-          <div className="mx-1 h-5 w-px bg-linie" />
-          <SymbolKnopf aktiv={vorher} title="Vorher/Nachher (\)" aria-label="Vorher/Nachher" onClick={() => setVorher(!vorher)}>
-            <Columns2 size={16} />
-          </SymbolKnopf>
-          <SymbolKnopf aktiv={zuschneiden} title="Zuschneiden (R)" aria-label="Zuschneiden" onClick={() => setZuschneiden(!zuschneiden)}>
-            <Crop size={16} />
-          </SymbolKnopf>
-          <button
-            className={cx("zahl h-8 rounded-md px-2 text-[12px]", lupe ? "bg-licht/15 text-licht" : "text-text-2 hover:bg-white/6 hover:text-text")}
-            title="1:1-Ansicht (Z)"
-            onClick={() => setLupe(!lupe)}
-          >
-            {lupe ? "1:1" : `${Math.round(passt * (tex[0] && bild ? tex[0] / (bild.breite || tex[0]) : 1) * 100)} %`}
-          </button>
-          <div className="mx-1 h-5 w-px bg-linie" />
-          <Knopf art="licht" onClick={() => setExportieren(true)} disabled={!bereit}>
-            <Download size={14} /> Exportieren
-          </Knopf>
-        </div>
-
         <div
           ref={ansichtRef}
           className={cx("relative min-h-0 flex-1 bg-[#0e0e0e]", lupe && !zuschneiden ? "overflow-auto" : "overflow-hidden")}
@@ -842,9 +857,19 @@ export default function Entwickeln({ id }: { id: string }) {
               {zuschneiden && bereit && (
                 <Zuschnittebene e={e} gb={gb} gh={gh} onChange={(z) => setze({ zuschnitt: z })} onEnde={ende} />
               )}
-              {vorher && <span className="absolute left-3 top-3 rounded bg-black/70 px-2 py-0.5 text-[11px] text-text">Vorher</span>}
+              {vorher && <span className="absolute right-3 top-3 rounded bg-black/70 px-2 py-0.5 text-[11px] text-text">Vorher</span>}
             </div>
           </div>
+          {info && bild && !zuschneiden && (
+            <div className="pointer-events-none absolute left-4 top-3 space-y-0.5 text-[12px] leading-snug text-text-2 [text-shadow:0_1px_2px_#000]">
+              <div className="text-[13px] text-text">{bild.name}</div>
+              <div className="zahl">
+                {tex[0] ? ausgabeGroesse(bild.breite, bild.hoehe, e).join(" × ") : `${bild.breite} × ${bild.hoehe}`}
+                {bild.kamera && ` · ${bild.kamera}`}
+              </div>
+              {exifTeile(bild).length > 0 && <div className="zahl">{exifTeile(bild).join("   ")}</div>}
+            </div>
+          )}
           {!bereit && !fehler && (
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-md bg-black/70 px-3 py-1.5">
               <Laedt text={bild?.art === "raw" ? "Entwickle RAW …" : "Lade …"} />
@@ -891,64 +916,111 @@ export default function Entwickeln({ id }: { id: string }) {
           )}
         </div>
 
-        {/* Filmstreifen */}
-        <div className="flex h-[84px] shrink-0 items-center gap-1.5 overflow-x-auto border-t border-linie bg-flaeche px-2">
-          {bilder.map((b) => (
-            <a
-              key={b.id}
-              href={`#/entwickeln/${b.id}`}
-              ref={(el) => {
-                if (el && b.id === id) el.scrollIntoView({ block: "nearest", inline: "nearest" });
-              }}
-              className={cx(
-                "flex h-[68px] w-[92px] shrink-0 items-center justify-center rounded border bg-[#121212]",
-                b.id === id ? "border-licht/80" : "border-transparent opacity-60 hover:opacity-100",
-              )}
-              title={b.name}
-            >
-              <img src={miniUrl(b)} alt="" loading="lazy" className="max-h-[60px] max-w-[84px] object-contain" />
-            </a>
-          ))}
-          {index < 0 && bilder.length === 0 && <span className="px-2 text-[12px] text-text-3">Keine weiteren Fotos</span>}
-        </div>
-      </div>
-
-      {/* Regler */}
-      <aside className="w-[300px] shrink-0 overflow-y-auto overflow-x-hidden border-l border-linie bg-flaeche">
-        <div className="border-b border-linie p-3">
-          <HistogrammAnzeige h={histo} />
-        </div>
-        <div className="flex items-center gap-1.5 border-b border-linie px-3 py-2.5">
-          <Knopf art="rahmen" className="h-7 flex-1 px-2" onClick={auto} disabled={!bereit}>
-            <Sparkles size={13} /> Automatisch
-          </Knopf>
-          <Knopf
-            art="rahmen"
-            className="h-7 flex-1 px-2"
-            onClick={() =>
-              frage({
-                title: "Alles zurücksetzen?",
-                message: "Alle Einstellungen dieses Fotos gehen auf den Ausgangszustand zurück, auch Zuschnitt und Drehung.",
-                primaryActionText: "Zurücksetzen",
-                onPrimaryAction: () => setze(standard(), true),
-              })
-            }
-          >
-            <RotateCcw size={13} /> Zurücksetzen
-          </Knopf>
-          <SymbolKnopf
-            className="h-7 w-7"
-            title="Einstellungen kopieren (Strg+Umschalt+C)"
-            onClick={() => {
-              zwischenablage = ohneGeometrie(e);
-              melde("Einstellungen kopiert – mit Strg+Umschalt+V auf ein anderes Foto übertragen");
-            }}
-          >
-            <Copy size={13} />
+        <div className="flex h-10 shrink-0 items-center gap-1 border-t border-black/50 bg-[#1c1c1c] px-3">
+          <a href="#/" className="mr-1">
+            <SymbolKnopf title="Zur Bibliothek (G)" aria-label="Zur Bibliothek">
+              <ArrowLeft size={16} />
+            </SymbolKnopf>
+          </a>
+          <div className="mr-auto" />
+          {aktuell && (
+            <div className="mr-2 hidden sm:block">
+              <Sterne wert={aktuell.bewertung} onChange={(v) => aendere([aktuell.id], { bewertung: v })} />
+            </div>
+          )}
+          <SymbolKnopf title="Rückgängig (Strg+Z)" aria-label="Rückgängig" onClick={() => schritt(-1)}>
+            <Undo2 size={16} />
           </SymbolKnopf>
+          <SymbolKnopf title="Wiederholen (Strg+Umschalt+Z)" aria-label="Wiederholen" onClick={() => schritt(1)}>
+            <Redo2 size={16} />
+          </SymbolKnopf>
+          <div className="mx-1 h-5 w-px bg-linie" />
+          <SymbolKnopf aktiv={vorher} title="Vorher/Nachher (\)" aria-label="Vorher/Nachher" onClick={() => setVorher(!vorher)}>
+            <Columns2 size={16} />
+          </SymbolKnopf>
+          <SymbolKnopf aktiv={zuschneiden} title="Zuschneiden (R)" aria-label="Zuschneiden" onClick={() => setZuschneiden(!zuschneiden)}>
+            <Crop size={16} />
+          </SymbolKnopf>
+          <button
+            className={cx("zahl h-8 rounded-md px-2 text-[12px]", lupe ? "bg-licht/15 text-licht" : "text-text-2 hover:bg-white/6 hover:text-text")}
+            title="1:1-Ansicht (Z)"
+            onClick={() => setLupe(!lupe)}
+          >
+            {lupe ? "1:1" : `${Math.round(passt * (tex[0] && bild ? tex[0] / (bild.breite || tex[0]) : 1) * 100)} %`}
+          </button>
+          <div className="mx-1 h-5 w-px bg-linie" />
+          <Knopf art="licht" onClick={() => setExportieren(true)} disabled={!bereit}>
+            <Download size={14} /> Exportieren
+          </Knopf>
         </div>
 
-        <Abschnitt titel="Grundeinstellungen">
+        <Filmstreifen
+          bilder={liste}
+          aktiv={id}
+          quelle={sammlungName(sammlung)}
+          onKlick={(b) => (location.hash = `#/entwickeln/${b.id}`)}
+        />
+      </div>
+      {/* Regler */}
+      <Seitenleiste
+        seite="rechts"
+        breite={300}
+        fuss={
+          <div className="flex gap-1.5">
+            <Knopf
+              art="rahmen"
+              className="h-7 flex-1 px-2 text-[12px]"
+              disabled={!vorherige || vorherige.id === id}
+              title="Einstellungen des zuvor bearbeiteten Fotos übernehmen (ohne Zuschnitt)"
+              onClick={() => vorherige && anwenden(vorherige.e)}
+            >
+              Vorherige
+            </Knopf>
+            <Knopf
+              art="rahmen"
+              className="h-7 flex-1 px-2 text-[12px]"
+              onClick={() =>
+                frage({
+                  title: "Alles zurücksetzen?",
+                  message: "Alle Einstellungen dieses Fotos gehen auf den Ausgangszustand zurück, auch Zuschnitt und Drehung.",
+                  primaryActionText: "Zurücksetzen",
+                  onPrimaryAction: () => setze(standard(), true),
+                })
+              }
+            >
+              Zurücksetzen
+            </Knopf>
+          </div>
+        }
+      >
+        <HistogrammPanel h={histo} bild={aktuell}>
+          <div className="mt-2.5 flex items-center justify-center gap-1 rounded-[3px] bg-[#151515] py-1">
+            <SymbolKnopf aktiv={zuschneiden} title="Zuschneiden (R)" aria-label="Zuschneiden" onClick={() => setZuschneiden(!zuschneiden)}>
+              <Crop size={15} />
+            </SymbolKnopf>
+            <SymbolKnopf aktiv={vorher} title="Vorher/Nachher (\)" aria-label="Vorher/Nachher" onClick={() => setVorher(!vorher)}>
+              <Columns2 size={15} />
+            </SymbolKnopf>
+            <SymbolKnopf title="Automatisch" aria-label="Automatisch" onClick={auto} disabled={!bereit}>
+              <Sparkles size={15} />
+            </SymbolKnopf>
+            <SymbolKnopf title="Links drehen" aria-label="Links drehen" onClick={() => drehe(-1)}>
+              <RotateCcw size={15} />
+            </SymbolKnopf>
+            <SymbolKnopf title="Rechts drehen" aria-label="Rechts drehen" onClick={() => drehe(1)}>
+              <RotateCw size={15} />
+            </SymbolKnopf>
+          </div>
+        </HistogrammPanel>
+
+        <Abschnitt
+          titel="Grundeinstellungen"
+          rechts={
+            <button className="mr-2 rounded-[3px] border border-linie px-1.5 py-[1px] text-[11px] text-text-2 hover:text-text" onClick={auto} disabled={!bereit} title="Ton automatisch einstellen">
+              Auto
+            </button>
+          }
+        >
           <div className="mb-1 text-[11px] uppercase tracking-wider text-text-3">Weißabgleich</div>
           {regler("Temperatur", "temperatur", -100, 100, { spur: "linear-gradient(90deg,#3f78d6,#9aa3ad,#e0a84a)" })}
           {regler("Tönung", "toenung", -100, 100, { spur: "linear-gradient(90deg,#3ea956,#9aa3ad,#c04fc0)" })}
@@ -1051,9 +1123,9 @@ export default function Entwickeln({ id }: { id: string }) {
           </p>
         </Abschnitt>
         <div className="p-4 text-[11px] leading-relaxed text-text-3">
-          Tasten: \ Vorher · R Zuschneiden · Z Lupe · ←/→ Foto · 0–5 Sterne · P/X Markieren · G Bibliothek
+          Tasten: \ Vorher · R Zuschneiden · Z Lupe · I Info · Tab Leisten · F6 Filmstreifen · ←/→ Foto · 0–5 Sterne · P/X Markieren · G Bibliothek
         </div>
-      </aside>
+      </Seitenleiste>
 
       {exportieren && bild && <ExportDialog bild={bild} e={e} onSchliessen={() => setExportieren(false)} />}
       {fehler && !bild && (

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Ban, Check, Flag, ImagePlus, Search, SlidersHorizontal, Trash2, Upload, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Ban, Download, Flag, Grid3x3, ImagePlus, Maximize2, Search, SlidersHorizontal, Trash2, Upload, X } from "lucide-react";
 import {
   api,
   formatiereBelichtung,
@@ -12,7 +12,9 @@ import {
   type Hochladefortschritt,
 } from "../api";
 import { FARBEN, Knopf, Laedt, Sterne, SymbolKnopf, cx, eingabe, farbeCss, frage, melde } from "../ui";
-import { useBibliothek } from "./speicher";
+import { abweichungen, vervollstaendige } from "../entwickeln/einstellungen";
+import { Dreieck, Filmstreifen, HistogrammPanel, Navigator, Panel, Seitenleiste, exifTeile, useBildHistogramm, useLeistenTasten } from "../lr";
+import { datumVon, letzterImport, sichtbar, tag, useBibliothek } from "./speicher";
 
 export const ANNEHMBAR =
   ".jpg,.jpeg,.png,.tif,.tiff,.webp,.heic,.heif,.avif,.gif,.bmp,.cr2,.cr3,.crw,.nef,.nrw,.arw,.srf,.sr2,.dng,.raf,.orf,.rw2,.pef,.srw,.x3f,.3fr,.iiq,.mos,.erf,.kdc,.mrw,.rwl";
@@ -62,28 +64,48 @@ export function Fortschrittsbalken({ f }: { f: Hochladefortschritt | null }) {
   );
 }
 
-function Markierung({ m }: { m: number }) {
-  if (m === 1) return <Flag size={12} className="text-text" fill="currentColor" aria-label="ausgewählt" />;
-  if (m === -1) return <Ban size={12} className="text-gefahr" aria-label="abgelehnt" />;
+const MONATE = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+
+export function sammlungName(s: string): string {
+  if (!s || s === "alle") return "Alle Fotos";
+  if (s === "zuletzt") return "Letzter Import";
+  if (s === "bearbeitet") return "Bearbeitet";
+  if (s === "unbearbeitet") return "Unbearbeitet";
+  const [art, wert] = [s.slice(0, s.indexOf(":")), s.slice(s.indexOf(":") + 1)];
+  if (art === "jahr") return wert;
+  if (art === "monat") return `${MONATE[Number(wert.slice(5, 7)) - 1]} ${wert.slice(0, 4)}`;
+  if (art === "kamera") return wert;
+  return s;
+}
+
+function Markierung({ m, gross }: { m: number; gross?: boolean }) {
+  const g = gross ? 14 : 12;
+  if (m === 1) return <Flag size={g} className="text-text" fill="currentColor" aria-label="ausgewählt" />;
+  if (m === -1) return <Ban size={g} className="text-gefahr" aria-label="abgelehnt" />;
   return null;
 }
 
-function Kachel({
+// ---------- Rasterzelle ----------
+
+function Zelle({
   b,
+  nummer,
   gewaehlt,
-  aktiv,
+  haupt,
   groesse,
   onKlick,
   onDoppel,
 }: {
   b: Bild;
+  nummer: number;
   gewaehlt: boolean;
-  aktiv: boolean;
+  haupt: boolean;
   groesse: number;
   onKlick: (e: React.MouseEvent) => void;
   onDoppel: () => void;
 }) {
   const farbe = farbeCss(b.farbe);
+  const hoehe = Math.round(groesse * 1.08);
   return (
     <div
       role="gridcell"
@@ -92,13 +114,27 @@ function Kachel({
       onClick={onKlick}
       onDoubleClick={onDoppel}
       className={cx(
-        "group relative flex cursor-default flex-col rounded-[5px] border bg-flaeche transition-colors",
-        gewaehlt ? "border-white/25 bg-feld-hell" : "border-transparent hover:bg-feld",
-        aktiv && "border-licht/70",
+        "group relative flex cursor-default select-none flex-col overflow-hidden rounded-[3px] transition-colors",
+        haupt ? "bg-[#4b4b4b]" : gewaehlt ? "bg-[#3c3c3c]" : "bg-[#2a2a2a] hover:bg-[#323232]",
       )}
-      style={{ width: groesse }}
+      style={{ width: groesse, height: hoehe, boxShadow: farbe ? `inset 0 0 0 2px ${farbe}` : "inset 0 1px 0 rgba(255,255,255,0.05)" }}
     >
-      <div className="relative flex items-center justify-center" style={{ height: groesse - 34 }}>
+      {/* laufende Nummer wie auf einem Kontaktabzug */}
+      <span
+        className="zahl pointer-events-none absolute left-1.5 top-0 font-bold leading-none text-white/[0.07]"
+        style={{ fontSize: Math.max(22, groesse * 0.24) }}
+        aria-hidden
+      >
+        {nummer}
+      </span>
+      <div className="relative z-[1] flex h-5 items-center gap-1 px-2 pt-1 text-[10.5px] text-text-3">
+        <span className="min-w-0 flex-1 truncate opacity-0 transition-opacity group-hover:opacity-100" title={b.name}>
+          {b.name}
+        </span>
+        {b.art === "raw" && <span className="rounded-[2px] bg-black/45 px-1 text-[8.5px] font-semibold tracking-wider text-text-2">RAW</span>}
+        {b.bearbeitet && <SlidersHorizontal size={10} className="text-licht" aria-label="bearbeitet" />}
+      </div>
+      <div className="relative z-[1] flex min-h-0 flex-1 items-center justify-center px-2.5">
         <img
           src={miniUrl(b)}
           alt={b.name}
@@ -106,27 +142,44 @@ function Kachel({
           decoding="async"
           draggable={false}
           className={cx(
-            "max-h-[calc(100%-14px)] max-w-[calc(100%-14px)] object-contain shadow-[0_2px_8px_rgba(0,0,0,0.5)]",
-            b.markierung === -1 && "opacity-35",
+            "max-h-full max-w-full object-contain shadow-[0_3px_10px_rgba(0,0,0,0.65)] outline outline-1 outline-black/40",
+            b.markierung === -1 && "opacity-30",
           )}
         />
-        <div className="absolute left-2 top-2 flex items-center gap-1">
-          {b.art === "raw" && (
-            <span className="rounded-[3px] bg-black/55 px-1 py-[1px] text-[9px] font-semibold tracking-wider text-text-2">RAW</span>
-          )}
-          {b.bearbeitet && <SlidersHorizontal size={11} className="text-licht drop-shadow" aria-label="bearbeitet" />}
-        </div>
       </div>
-      <div className="flex h-[34px] items-center justify-between gap-1 px-2">
+      <div className="relative z-[1] flex h-7 items-center justify-between gap-1 px-2">
         <Sterne wert={b.bewertung} klein />
-        <div className="flex items-center gap-1.5">
-          <Markierung m={b.markierung} />
-          {farbe && <span className="h-2.5 w-2.5 rounded-full" style={{ background: farbe }} />}
-        </div>
+        <Markierung m={b.markierung} />
       </div>
     </div>
   );
 }
+
+// ---------- Lupe ----------
+
+function Lupe({ b }: { b: Bild }) {
+  return (
+    <div className="relative flex h-full items-center justify-center bg-[#0e0e0e] p-6">
+      <img
+        key={b.id}
+        src={vorschauUrl(b)}
+        alt={b.name}
+        draggable={false}
+        className={cx("max-h-full max-w-full object-contain shadow-[0_6px_30px_rgba(0,0,0,0.7)]", b.markierung === -1 && "opacity-40")}
+      />
+      <div className="pointer-events-none absolute left-4 top-3 space-y-0.5 text-[12px] leading-snug text-text-2 [text-shadow:0_1px_2px_#000]">
+        <div className="text-[13px] text-text">{b.name}</div>
+        <div className="zahl">
+          {b.breite} × {b.hoehe}
+          {datumVon(b) && ` · ${formatiereDatum(b.aufgenommen || b.angelegt)}`}
+        </div>
+        {exifTeile(b).length > 0 && <div className="zahl">{exifTeile(b).join("   ")}</div>}
+      </div>
+    </div>
+  );
+}
+
+// ---------- Filter ----------
 
 function Filterleiste({ anzahl }: { anzahl: number }) {
   const { filter, setzeFilter } = useBibliothek();
@@ -136,24 +189,26 @@ function Filterleiste({ anzahl }: { anzahl: number }) {
     return () => clearTimeout(t);
   }, [suche, filter.suche, setzeFilter]);
   const seg = (aktiv: boolean) =>
-    cx("h-7 rounded-[5px] px-2.5 text-[12px] transition-colors", aktiv ? "bg-feld-hell text-text" : "text-text-2 hover:text-text");
+    cx("h-6 rounded-[3px] px-2 text-[11.5px] transition-colors", aktiv ? "bg-[#3d3d3d] text-text" : "text-text-2 hover:text-text");
+  const gefiltert = Boolean(filter.bewertung || filter.markierung || filter.art || filter.farbe || filter.suche);
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-linie px-4 py-2.5">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b border-black/50 bg-[#1c1c1c] px-3 py-1.5">
+      <span className="text-[11.5px] text-text-3">Bibliotheksfilter</span>
       <div className="relative">
-        <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-3" />
+        <Search size={13} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-text-3" />
         <input
-          className={cx(eingabe, "h-8 w-52 pl-8")}
-          placeholder="Name, Kamera, Objektiv"
+          className={cx(eingabe, "h-7 w-48 pl-7 text-[12px]")}
+          placeholder="Text: Name, Kamera, Objektiv"
           value={suche}
           onChange={(e) => setSuche(e.target.value)}
           onKeyDown={(e) => e.stopPropagation()}
         />
       </div>
       <div className="flex items-center gap-1.5">
-        <span className="text-[12px] text-text-3">ab</span>
+        <span className="text-[11.5px] text-text-3">Bewertung ≥</span>
         <Sterne wert={filter.bewertung ?? 0} onChange={(v) => setzeFilter({ bewertung: v })} />
       </div>
-      <div className="flex rounded-md bg-feld p-[2px]">
+      <div className="flex rounded-[4px] bg-[#262626] p-[2px]">
         {(
           [
             ["", "Alle"],
@@ -169,7 +224,7 @@ function Filterleiste({ anzahl }: { anzahl: number }) {
       </div>
       <button
         className={cx(
-          "h-7 rounded-md border px-2.5 text-[11px] font-semibold tracking-wider",
+          "h-6 rounded-[4px] border px-2 text-[10.5px] font-semibold tracking-wider",
           filter.art === "raw" ? "border-licht/60 text-licht" : "border-linie text-text-3 hover:text-text-2",
         )}
         onClick={() => setzeFilter({ art: filter.art === "raw" ? "" : "raw" })}
@@ -186,142 +241,309 @@ function Filterleiste({ anzahl }: { anzahl: number }) {
             aria-pressed={filter.farbe === f.wert}
             onClick={() => setzeFilter({ farbe: filter.farbe === f.wert ? "" : f.wert })}
             className={cx(
-              "h-3.5 w-3.5 rounded-full transition-transform hover:scale-110",
-              filter.farbe === f.wert ? "ring-2 ring-white/80 ring-offset-2 ring-offset-grund" : "opacity-70",
+              "h-3 w-3 rounded-[2px] transition-transform hover:scale-110",
+              filter.farbe === f.wert ? "ring-2 ring-white/80 ring-offset-2 ring-offset-[#1c1c1c]" : "opacity-70",
             )}
             style={{ background: f.css }}
           />
         ))}
       </div>
-      <div className="ml-auto flex items-center gap-3">
-        <span className="zahl text-[12px] text-text-3">{anzahl} Fotos</span>
-        <select
-          className="h-8 rounded-md border border-linie bg-feld px-2 text-[12px] text-text-2 outline-none"
-          value={filter.ordnung ?? "aufgenommen"}
-          onChange={(e) => setzeFilter({ ordnung: e.target.value as never })}
-          aria-label="Sortierung"
+      {gefiltert && (
+        <button
+          className="flex items-center gap-1 text-[11.5px] text-text-3 hover:text-text"
+          onClick={() => {
+            setSuche("");
+            setzeFilter({ bewertung: 0, markierung: "", art: "", farbe: "", suche: "" });
+          }}
         >
-          <option value="aufgenommen">Aufnahmedatum</option>
-          <option value="angelegt">Importiert</option>
-          <option value="name">Name</option>
-          <option value="bewertung">Bewertung</option>
-        </select>
-      </div>
+          <X size={12} /> Ohne
+        </button>
+      )}
+      <span className="zahl ml-auto text-[11.5px] text-text-3">{anzahl} Fotos</span>
     </div>
   );
 }
 
-function Info({ b, anzahl }: { b: Bild; anzahl: number }) {
-  const { aendere, entferne } = useBibliothek();
-  const zeilen: [string, string][] = [
-    ["Aufgenommen", formatiereDatum(b.aufgenommen)],
-    ["Kamera", b.kamera],
-    ["Objektiv", b.objektiv],
-    [
-      "Belichtung",
-      [b.brennweite ? `${Math.round(b.brennweite)} mm` : "", b.blende ? `f/${b.blende}` : "", formatiereBelichtung(b.belichtungszeit), b.iso ? `ISO ${b.iso}` : ""]
-        .filter(Boolean)
-        .join("  ·  "),
-    ],
-    ["Größe", `${b.breite} × ${b.hoehe} · ${formatiereBytes(b.bytes)}`],
-    ["Importiert", formatiereDatum(b.angelegt)],
-  ];
-  const ids = useBibliothek((s) => s.auswahl);
-  const alle = ids.length > 1 ? ids : [b.id];
+// ---------- Linke Leiste: Katalog ----------
+
+function Eintrag({ name, zahl, an, onKlick, einzug = 0, aufklapper }: { name: string; zahl: number; an: boolean; onKlick: () => void; einzug?: number; aufklapper?: ReactNode }) {
   return (
-    <aside className="hidden w-[300px] shrink-0 flex-col overflow-y-auto border-l border-linie bg-flaeche lg:flex">
-      <div className="flex aspect-[4/3] items-center justify-center bg-[#0d0d0d] p-3">
-        <img src={vorschauUrl(b)} alt="" className="max-h-full max-w-full object-contain" />
-      </div>
-      <div className="space-y-4 p-4">
-        <div>
-          <div className="truncate text-[14px] font-medium" title={b.name}>
-            {b.name}
-          </div>
-          {anzahl > 1 && <div className="mt-0.5 text-[12px] text-licht">{anzahl} Fotos gewählt – Änderungen gelten für alle</div>}
-        </div>
-        <div className="flex items-center justify-between">
-          <Sterne wert={b.bewertung} onChange={(v) => aendere(alle, { bewertung: v })} />
-          <div className="flex items-center gap-1">
-            <SymbolKnopf aktiv={b.markierung === 1} title="Auswählen (P)" onClick={() => aendere(alle, { markierung: b.markierung === 1 ? 0 : 1 })}>
-              <Flag size={15} />
-            </SymbolKnopf>
-            <SymbolKnopf aktiv={b.markierung === -1} title="Ablehnen (X)" onClick={() => aendere(alle, { markierung: b.markierung === -1 ? 0 : -1 })}>
-              <Ban size={15} />
-            </SymbolKnopf>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
+    <div
+      className={cx("flex h-[26px] cursor-default items-center gap-1.5 rounded-[2px] pr-2 text-[12.5px]", an ? "bg-[#3d3d3d] text-text" : "text-text-2 hover:bg-white/[0.04] hover:text-text")}
+      style={{ paddingLeft: 8 + einzug * 14 }}
+      onClick={onKlick}
+      role="button"
+      aria-pressed={an}
+    >
+      <span className="flex w-3 justify-center">{aufklapper}</span>
+      <span className="min-w-0 flex-1 truncate">{name}</span>
+      <span className="zahl text-[11.5px] text-text-3">{zahl}</span>
+    </div>
+  );
+}
+
+function Katalog({ bilder }: { bilder: Bild[] }) {
+  const { sammlung, setzeSammlung } = useBibliothek();
+  const [offeneJahre, setOffeneJahre] = useState<string[]>(() => (sammlung.startsWith("monat:") ? [sammlung.slice(6, 10)] : []));
+  const zuletzt = letzterImport(bilder);
+  const zaehle = (f: (b: Bild) => boolean) => bilder.filter(f).length;
+
+  const jahre = useMemo(() => {
+    const k = new Map<string, Map<string, number>>();
+    for (const b of bilder) {
+      const d = datumVon(b);
+      if (!d) continue;
+      const j = d.slice(0, 4);
+      const m = d.slice(0, 7);
+      if (!k.has(j)) k.set(j, new Map());
+      k.get(j)!.set(m, (k.get(j)!.get(m) ?? 0) + 1);
+    }
+    return [...k.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+  }, [bilder]);
+
+  const kameras = useMemo(() => {
+    const k = new Map<string, number>();
+    for (const b of bilder) {
+      const n = b.kamera || "Unbekannte Kamera";
+      k.set(n, (k.get(n) ?? 0) + 1);
+    }
+    return [...k.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  }, [bilder]);
+
+  return (
+    <>
+      <Panel titel="Katalog" seite="links">
+        <Eintrag name="Alle Fotos" zahl={bilder.length} an={sammlung === "alle"} onKlick={() => setzeSammlung("alle")} />
+        <Eintrag name="Letzter Import" zahl={zaehle((b) => tag(b.angelegt) === zuletzt)} an={sammlung === "zuletzt"} onKlick={() => setzeSammlung("zuletzt")} />
+        <Eintrag name="Bearbeitet" zahl={zaehle((b) => b.bearbeitet)} an={sammlung === "bearbeitet"} onKlick={() => setzeSammlung("bearbeitet")} />
+        <Eintrag name="Unbearbeitet" zahl={zaehle((b) => !b.bearbeitet)} an={sammlung === "unbearbeitet"} onKlick={() => setzeSammlung("unbearbeitet")} />
+      </Panel>
+      <Panel titel="Nach Datum" seite="links">
+        {jahre.length === 0 && <p className="px-2 text-[12px] text-text-3">Noch keine Fotos</p>}
+        {jahre.map(([j, monate]) => {
+          const offen = offeneJahre.includes(j);
+          return (
+            <div key={j}>
+              <Eintrag
+                name={j}
+                zahl={[...monate.values()].reduce((a, b) => a + b, 0)}
+                an={sammlung === "jahr:" + j}
+                onKlick={() => setzeSammlung("jahr:" + j)}
+                aufklapper={
+                  <button
+                    className="text-text-3 hover:text-text"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOffeneJahre(offen ? offeneJahre.filter((x) => x !== j) : [...offeneJahre, j]);
+                    }}
+                    aria-label={offen ? `${j} zuklappen` : `${j} aufklappen`}
+                  >
+                    <Dreieck richtung={offen ? "unten" : "rechts"} />
+                  </button>
+                }
+              />
+              {offen &&
+                [...monate.entries()]
+                  .sort((a, b) => b[0].localeCompare(a[0]))
+                  .map(([m, n]) => (
+                    <Eintrag key={m} name={MONATE[Number(m.slice(5, 7)) - 1]} zahl={n} einzug={1} an={sammlung === "monat:" + m} onKlick={() => setzeSammlung("monat:" + m)} />
+                  ))}
+            </div>
+          );
+        })}
+      </Panel>
+      <Panel titel="Nach Kamera" seite="links" offen={false}>
+        {kameras.map(([k, n]) => (
+          <Eintrag key={k} name={k} zahl={n} an={sammlung === "kamera:" + k} onKlick={() => setzeSammlung("kamera:" + k)} />
+        ))}
+      </Panel>
+    </>
+  );
+}
+
+// ---------- Rechte Leiste ----------
+
+function Zeile({ name, children }: { name: string; children: ReactNode }) {
+  return (
+    <div className="grid grid-cols-[92px_1fr] items-center gap-2 py-[3px] text-[12px]">
+      <span className="truncate text-right text-text-3">{name}</span>
+      <span className="min-w-0 truncate text-text-2">{children}</span>
+    </div>
+  );
+}
+
+function Metadaten({ b, alle }: { b: Bild; alle: string[] }) {
+  const aendere = useBibliothek((s) => s.aendere);
+  return (
+    <Panel titel="Metadaten">
+      {alle.length > 1 && <p className="mb-2 text-[11.5px] text-licht">{alle.length} Fotos gewählt – Bewertung, Markierung und Farbe gelten für alle</p>}
+      <Zeile name="Dateiname">
+        <span title={b.name}>{b.name}</span>
+      </Zeile>
+      <Zeile name="Bewertung">
+        <Sterne wert={b.bewertung} onChange={(v) => aendere(alle, { bewertung: v })} />
+      </Zeile>
+      <Zeile name="Markierung">
+        <span className="flex items-center gap-0.5">
+          <SymbolKnopf className="h-6 w-6" aktiv={b.markierung === 1} title="Auswählen (P)" onClick={() => aendere(alle, { markierung: b.markierung === 1 ? 0 : 1 })}>
+            <Flag size={13} />
+          </SymbolKnopf>
+          <SymbolKnopf className="h-6 w-6" aktiv={b.markierung === -1} title="Ablehnen (X)" onClick={() => aendere(alle, { markierung: b.markierung === -1 ? 0 : -1 })}>
+            <Ban size={13} />
+          </SymbolKnopf>
+        </span>
+      </Zeile>
+      <Zeile name="Farbe">
+        <span className="flex items-center gap-1.5">
           {FARBEN.map((f) => (
             <button
               key={f.wert}
               title={f.name}
               aria-label={`Farbe ${f.name}`}
               onClick={() => aendere(alle, { farbe: b.farbe === f.wert ? "" : f.wert })}
-              className={cx("h-4 w-4 rounded-full", b.farbe === f.wert ? "ring-2 ring-white/80 ring-offset-2 ring-offset-flaeche" : "opacity-60 hover:opacity-100")}
+              className={cx("h-3 w-3 rounded-[2px]", b.farbe === f.wert ? "ring-2 ring-white/80 ring-offset-1 ring-offset-flaeche" : "opacity-55 hover:opacity-100")}
               style={{ background: f.css }}
             />
           ))}
-        </div>
-        <dl className="space-y-2 text-[12.5px]">
-          {zeilen
-            .filter(([, w]) => w)
-            .map(([n, w]) => (
-              <div key={n}>
-                <dt className="text-[11px] uppercase tracking-wider text-text-3">{n}</dt>
-                <dd className="text-text-2">{w}</dd>
-              </div>
-            ))}
-        </dl>
-        <div className="flex flex-wrap gap-2 pt-2">
-          <a href={`#/entwickeln/${b.id}`} className="inline-flex">
-            <Knopf art="licht">
-              <SlidersHorizontal size={14} /> Entwickeln
-            </Knopf>
-          </a>
-          <a href={`/api/bilder/${b.id}/original`} className="inline-flex">
-            <Knopf art="rahmen">Original</Knopf>
-          </a>
-          <Knopf
-            art="gefahr"
-            onClick={() =>
-              frage({
-                title: alle.length > 1 ? `${alle.length} Fotos löschen?` : "Foto löschen?",
-                message: "Original, Einstellungen und Vorschauen werden entfernt.",
-                primaryActionText: "Löschen",
-                onPrimaryAction: async () => {
-                  for (const id of alle) {
-                    try {
-                      await api.loeschen(id);
-                      entferne(id);
-                    } catch (e) {
-                      melde((e as Error).message, "fehler");
-                    }
-                  }
-                },
-              })
-            }
-          >
-            <Trash2 size={14} /> Löschen
-          </Knopf>
-        </div>
-      </div>
-    </aside>
+        </span>
+      </Zeile>
+      <div className="my-2 h-px bg-linie" />
+      <Zeile name="Aufgenommen">{formatiereDatum(b.aufgenommen) || "–"}</Zeile>
+      <Zeile name="Abmessungen">
+        <span className="zahl">
+          {b.breite} × {b.hoehe}
+        </span>
+      </Zeile>
+      <Zeile name="Dateigröße">{formatiereBytes(b.bytes)}</Zeile>
+      <Zeile name="Format">{b.art.toUpperCase()}</Zeile>
+      <Zeile name="Kamera">{b.kamera || "–"}</Zeile>
+      <Zeile name="Objektiv">{b.objektiv || "–"}</Zeile>
+      <Zeile name="Brennweite">{b.brennweite ? `${Math.round(b.brennweite)} mm` : "–"}</Zeile>
+      <Zeile name="Blende">{b.blende ? `f/${String(b.blende).replace(".", ",")}` : "–"}</Zeile>
+      <Zeile name="Belichtung">{formatiereBelichtung(b.belichtungszeit) || "–"}</Zeile>
+      <Zeile name="ISO">{b.iso || "–"}</Zeile>
+      <Zeile name="Importiert">{formatiereDatum(b.angelegt)}</Zeile>
+    </Panel>
   );
 }
 
+function Bearbeitungen({ b }: { b: Bild }) {
+  const liste = useMemo(() => abweichungen(vervollstaendige(b.einstellungen)), [b.einstellungen]);
+  return (
+    <Panel titel="Bearbeitungen" offen={false}>
+      {liste.length === 0 ? (
+        <p className="text-[12px] text-text-3">Unbearbeitet</p>
+      ) : (
+        liste.map(([n, w]) => (
+          <Zeile key={n} name={n}>
+            <span className="zahl">{w}</span>
+          </Zeile>
+        ))
+      )}
+    </Panel>
+  );
+}
+
+// ---------- Werkzeugleiste unter dem Raster ----------
+
+function Werkzeugleiste({
+  ansicht,
+  setAnsicht,
+  groesse,
+  setGroesse,
+  aktiv,
+  ids,
+}: {
+  ansicht: "raster" | "lupe";
+  setAnsicht: (a: "raster" | "lupe") => void;
+  groesse: number;
+  setGroesse: (g: number) => void;
+  aktiv?: Bild;
+  ids: string[];
+}) {
+  const { filter, setzeFilter, aendere } = useBibliothek();
+  const knopf = (an: boolean) => cx("flex h-6 w-7 items-center justify-center rounded-[3px]", an ? "bg-[#454545] text-text" : "text-text-3 hover:text-text");
+  return (
+    <div className="flex h-9 shrink-0 items-center gap-3 border-t border-black/50 bg-[#1c1c1c] px-3 text-[12px] text-text-3">
+      <div className="flex rounded-[4px] bg-[#262626] p-[2px]">
+        <button className={knopf(ansicht === "raster")} onClick={() => setAnsicht("raster")} title="Rasteransicht (G)" aria-label="Rasteransicht">
+          <Grid3x3 size={14} />
+        </button>
+        <button className={knopf(ansicht === "lupe")} onClick={() => aktiv && setAnsicht("lupe")} title="Lupenansicht (E)" aria-label="Lupenansicht" disabled={!aktiv}>
+          <Maximize2 size={13} />
+        </button>
+      </div>
+      <label className="flex items-center gap-1.5">
+        Sortieren:
+        <select
+          className="h-6 rounded-[3px] border border-linie bg-[#262626] px-1.5 text-[12px] text-text-2 outline-none"
+          value={filter.ordnung ?? "aufgenommen"}
+          onChange={(e) => setzeFilter({ ordnung: e.target.value as never })}
+        >
+          <option value="aufgenommen">Aufnahmedatum</option>
+          <option value="angelegt">Importzeit</option>
+          <option value="name">Dateiname</option>
+          <option value="bewertung">Bewertung</option>
+        </select>
+      </label>
+      {aktiv && (
+        <div className="flex items-center gap-2 border-l border-linie pl-3">
+          <SymbolKnopf className="h-6 w-6" aktiv={aktiv.markierung === 1} title="Auswählen (P)" onClick={() => aendere(ids, { markierung: aktiv.markierung === 1 ? 0 : 1 })}>
+            <Flag size={13} />
+          </SymbolKnopf>
+          <SymbolKnopf className="h-6 w-6" aktiv={aktiv.markierung === -1} title="Ablehnen (X)" onClick={() => aendere(ids, { markierung: aktiv.markierung === -1 ? 0 : -1 })}>
+            <Ban size={13} />
+          </SymbolKnopf>
+          <Sterne wert={aktiv.bewertung} onChange={(v) => aendere(ids, { bewertung: v })} />
+          <div className="flex items-center gap-1">
+            {FARBEN.map((f) => (
+              <button
+                key={f.wert}
+                title={f.name}
+                aria-label={`Farbe ${f.name}`}
+                onClick={() => aendere(ids, { farbe: aktiv.farbe === f.wert ? "" : f.wert })}
+                className={cx("h-3 w-3 rounded-[2px]", aktiv.farbe === f.wert ? "ring-2 ring-white/80 ring-offset-1 ring-offset-[#1c1c1c]" : "opacity-55 hover:opacity-100")}
+                style={{ background: f.css }}
+              />
+            ))}
+          </div>
+          {ids.length > 1 && (
+            <span className="flex items-center gap-1 text-text-2">
+              {ids.length} gewählt
+              <button className="text-text-3 hover:text-text" onClick={() => useBibliothek.setState({ auswahl: [aktiv.id] })} aria-label="Auswahl aufheben">
+                <X size={12} />
+              </button>
+            </span>
+          )}
+        </div>
+      )}
+      {ansicht === "raster" && (
+        <label className="ml-auto flex items-center gap-2">
+          <span className="hidden sm:inline">Miniaturen</span>
+          <input type="range" className="regler w-28" min={110} max={340} value={groesse} onChange={(e) => setGroesse(Number(e.target.value))} aria-label="Miniaturgröße" />
+        </label>
+      )}
+    </div>
+  );
+}
+
+// ---------- Modul ----------
+
 export default function Bibliothek() {
-  const { bilder, geladen, auswahl, waehle, aendere, laden, entferne } = useBibliothek();
+  const { bilder: alleBilder, geladen, auswahl, waehle, aendere, laden, entferne, sammlung } = useBibliothek();
+  const bilder = useMemo(() => sichtbar(alleBilder, sammlung), [alleBilder, sammlung]);
   const { fortschritt, lade, waehle: dateienWaehlen } = useHochladen();
   const [ziehen, setZiehen] = useState(false);
+  const [ansicht, setAnsicht] = useState<"raster" | "lupe">("raster");
   const [groesse, setGroesse] = useState(() => {
     try {
-      return Number(localStorage.getItem("captr-kachel")) || 190;
+      return Number(localStorage.getItem("captr-kachel")) || 180;
     } catch {
-      return 190;
+      return 180;
     }
   });
   const raster = useRef<HTMLDivElement>(null);
+  useLeistenTasten();
 
   useEffect(() => {
     void laden();
@@ -336,13 +558,45 @@ export default function Bibliothek() {
   }, [groesse]);
 
   const aktiv = useMemo(() => bilder.find((b) => b.id === auswahl[0]), [bilder, auswahl]);
+  const histo = useBildHistogramm(aktiv);
+  const ids = auswahl.length ? auswahl : [];
+  const alle = ids.length > 1 ? ids : aktiv ? [aktiv.id] : [];
 
-  // Tastatur wie in Lightroom
+  useEffect(() => {
+    if (ansicht === "lupe" && !aktiv) setAnsicht("raster");
+  }, [ansicht, aktiv]);
+
+  // wie gewohnt: ohne Auswahl ist das erste Foto aktiv, damit Navigator,
+  // Histogramm und Metadaten etwas zeigen
+  useEffect(() => {
+    if (geladen && bilder.length && !bilder.some((b) => auswahl.includes(b.id))) useBibliothek.setState({ auswahl: [bilder[0].id] });
+  }, [geladen, bilder, auswahl]);
+
+  const loeschen = useCallback(
+    (liste: string[]) =>
+      frage({
+        title: liste.length > 1 ? `${liste.length} Fotos löschen?` : "Foto löschen?",
+        message: "Original, Einstellungen und Vorschauen werden entfernt.",
+        primaryActionText: "Löschen",
+        onPrimaryAction: async () => {
+          for (const id of liste) {
+            try {
+              await api.loeschen(id);
+              entferne(id);
+            } catch (err) {
+              melde((err as Error).message, "fehler");
+            }
+          }
+        },
+      }),
+    [entferne],
+  );
+
+  // Tastatur wie in gewohnten Fotoprogrammen
   useEffect(() => {
     const taste = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
       if (["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName) || document.querySelector("[role=dialog]")) return;
-      const ids = auswahl.length ? auswahl : [];
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
         e.preventDefault();
         useBibliothek.setState({ auswahl: bilder.map((b) => b.id) });
@@ -359,33 +613,19 @@ export default function Bibliothek() {
       if (k === "p" && ids.length) return void aendere(ids, { markierung: 1 });
       if (k === "x" && ids.length) return void aendere(ids, { markierung: -1 });
       if (k === "u" && ids.length) return void aendere(ids, { markierung: 0 });
+      if (k === "g") return setAnsicht("raster");
+      if (k === "e" && aktiv) return setAnsicht("lupe");
+      if (k === "escape" && ansicht === "lupe") return setAnsicht("raster");
       if ((k === "enter" || k === "d") && aktiv) {
         location.hash = `#/entwickeln/${aktiv.id}`;
         return;
       }
-      if ((k === "delete" || k === "backspace") && ids.length) {
-        frage({
-          title: ids.length > 1 ? `${ids.length} Fotos löschen?` : "Foto löschen?",
-          message: "Original, Einstellungen und Vorschauen werden entfernt.",
-          primaryActionText: "Löschen",
-          onPrimaryAction: async () => {
-            for (const id of ids) {
-              try {
-                await api.loeschen(id);
-                entferne(id);
-              } catch (err) {
-                melde((err as Error).message, "fehler");
-              }
-            }
-          },
-        });
-        return;
-      }
+      if ((k === "delete" || k === "backspace") && ids.length) return loeschen(ids);
       if (["arrowleft", "arrowright", "arrowup", "arrowdown"].includes(k) && bilder.length) {
         e.preventDefault();
         const i = Math.max(0, bilder.findIndex((b) => b.id === auswahl[0]));
         const breite = raster.current?.clientWidth ?? 800;
-        const proZeile = Math.max(1, Math.floor((breite - 24) / (groesse + 8)));
+        const proZeile = ansicht === "lupe" ? 1 : Math.max(1, Math.floor((breite - 20 + 6) / (groesse + 6)));
         const schritt = { arrowleft: -1, arrowright: 1, arrowup: -proZeile, arrowdown: proZeile }[k]!;
         const n = Math.min(bilder.length - 1, Math.max(0, i + schritt));
         waehle(bilder[n].id, e.shiftKey ? "bereich" : "einzeln");
@@ -394,13 +634,16 @@ export default function Bibliothek() {
     };
     window.addEventListener("keydown", taste);
     return () => window.removeEventListener("keydown", taste);
-  }, [auswahl, bilder, aendere, aktiv, waehle, groesse, entferne]);
+  }, [auswahl, bilder, aendere, aktiv, waehle, groesse, ansicht, ids, loeschen]);
 
   const ablegen = (e: React.DragEvent) => {
     e.preventDefault();
     setZiehen(false);
     void lade(Array.from(e.dataTransfer.files));
   };
+
+  const klick = (b: Bild, e: React.MouseEvent) => waehle(b.id, e.shiftKey ? "bereich" : e.ctrlKey || e.metaKey ? "dazu" : "einzeln");
+  const gefiltert = Object.values(useBibliothek.getState().filter).some((v) => v && v !== "aufgenommen") || sammlung !== "alle";
 
   return (
     <div
@@ -415,66 +658,108 @@ export default function Bibliothek() {
       onDrop={ablegen}
     >
       <Fortschrittsbalken f={fortschritt} />
-      <Filterleiste anzahl={bilder.length} />
       <div className="flex min-h-0 flex-1">
+        <Seitenleiste
+          seite="links"
+          breite={250}
+          fuss={
+            <Knopf art="rahmen" className="w-full" onClick={dateienWaehlen}>
+              <Upload size={14} /> Importieren …
+            </Knopf>
+          }
+        >
+          <Navigator bild={aktiv} />
+          <Katalog bilder={alleBilder} />
+        </Seitenleiste>
+
         <div className="flex min-w-0 flex-1 flex-col">
+          {ansicht === "raster" && <Filterleiste anzahl={bilder.length} />}
           <div
             ref={raster}
             role="grid"
             aria-label="Fotos"
-            className="min-h-0 flex-1 overflow-y-auto p-3"
-            onClick={(e) => e.target === e.currentTarget && useBibliothek.setState({ auswahl: [] })}
+            className={cx("min-h-0 flex-1 bg-[#161616]", ansicht === "raster" ? "overflow-y-auto p-2.5" : "overflow-hidden")}
           >
             {!geladen ? (
               <div className="p-6">
                 <Laedt />
               </div>
             ) : bilder.length === 0 ? (
-              <Leer onImport={dateienWaehlen} gefiltert={Object.values(useBibliothek.getState().filter).some(Boolean)} />
+              <Leer onImport={dateienWaehlen} gefiltert={gefiltert} />
+            ) : ansicht === "lupe" && aktiv ? (
+              <div className="h-full" onDoubleClick={() => setAnsicht("raster")}>
+                <Lupe b={aktiv} />
+              </div>
             ) : (
-              <div className="flex flex-wrap content-start gap-2">
-                {bilder.map((b) => (
-                  <Kachel
+              <div
+                className="grid content-start justify-start gap-1.5"
+                style={{ gridTemplateColumns: `repeat(auto-fill, ${groesse}px)` }}
+              >
+                {bilder.map((b, i) => (
+                  <Zelle
                     key={b.id}
                     b={b}
+                    nummer={i + 1}
                     groesse={groesse}
                     gewaehlt={auswahl.includes(b.id)}
-                    aktiv={auswahl[0] === b.id && auswahl.length > 1}
-                    onKlick={(e) => waehle(b.id, e.shiftKey ? "bereich" : e.ctrlKey || e.metaKey ? "dazu" : "einzeln")}
-                    onDoppel={() => (location.hash = `#/entwickeln/${b.id}`)}
+                    haupt={auswahl[0] === b.id}
+                    onKlick={(e) => klick(b, e)}
+                    onDoppel={() => {
+                      waehle(b.id);
+                      setAnsicht("lupe");
+                    }}
                   />
                 ))}
               </div>
             )}
           </div>
-          <div className="flex h-10 shrink-0 items-center justify-between border-t border-linie px-4">
-            <Knopf art="rahmen" onClick={dateienWaehlen}>
-              <Upload size={14} /> Importieren
-            </Knopf>
-            <div className="flex items-center gap-3 text-[12px] text-text-3">
-              {auswahl.length > 1 && (
-                <span className="flex items-center gap-1 text-text-2">
-                  <Check size={13} /> {auswahl.length} gewählt
-                  <button className="ml-1 text-text-3 hover:text-text" onClick={() => useBibliothek.setState({ auswahl: [] })} aria-label="Auswahl aufheben">
-                    <X size={13} />
-                  </button>
-                </span>
-              )}
-              <span className="hidden sm:inline">Größe</span>
-              <input
-                type="range"
-                className="regler w-28"
-                min={120}
-                max={360}
-                value={groesse}
-                onChange={(e) => setGroesse(Number(e.target.value))}
-                aria-label="Kachelgröße"
-              />
-            </div>
-          </div>
+          <Werkzeugleiste ansicht={ansicht} setAnsicht={setAnsicht} groesse={groesse} setGroesse={setGroesse} aktiv={aktiv} ids={alle} />
         </div>
-        {aktiv && <Info b={aktiv} anzahl={auswahl.length} />}
+
+        <Seitenleiste
+          seite="rechts"
+          breite={290}
+          fuss={
+            aktiv && (
+              <div className="flex gap-1.5">
+                <a href={`#/entwickeln/${aktiv.id}`} className="flex-1">
+                  <Knopf art="licht" className="w-full">
+                    <SlidersHorizontal size={14} /> Entwickeln
+                  </Knopf>
+                </a>
+                <a href={`/api/bilder/${aktiv.id}/original`} title="Original herunterladen">
+                  <Knopf art="rahmen" aria-label="Original herunterladen">
+                    <Download size={14} />
+                  </Knopf>
+                </a>
+                <Knopf art="gefahr" onClick={() => loeschen(alle)} title="Löschen (Entf)" aria-label="Löschen">
+                  <Trash2 size={14} />
+                </Knopf>
+              </div>
+            )
+          }
+        >
+          <HistogrammPanel h={histo} bild={aktiv} />
+          {aktiv ? (
+            <>
+              <Metadaten b={aktiv} alle={alle} />
+              <Bearbeitungen b={aktiv} />
+            </>
+          ) : (
+            <p className="p-4 text-[12px] text-text-3">Foto anklicken, um Bewertung, Markierung und Aufnahmedaten zu sehen.</p>
+          )}
+        </Seitenleiste>
       </div>
+
+      <Filmstreifen
+        bilder={bilder}
+        aktiv={auswahl[0]}
+        auswahl={auswahl}
+        quelle={sammlungName(sammlung)}
+        onKlick={klick}
+        onDoppel={(b) => (location.hash = `#/entwickeln/${b.id}`)}
+      />
+
       {ziehen && (
         <div className="pointer-events-none absolute inset-2 z-50 flex items-center justify-center rounded-xl border-2 border-dashed border-licht/70 bg-black/60">
           <div className="flex flex-col items-center gap-2 text-licht">
@@ -492,9 +777,15 @@ function Leer({ onImport, gefiltert }: { onImport: () => void; gefiltert: boolea
   if (gefiltert)
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 text-text-3">
-        <p>Kein Foto passt zum Filter.</p>
-        <Knopf art="rahmen" onClick={() => useBibliothek.getState().setzeFilter({ bewertung: 0, markierung: "", art: "", farbe: "", suche: "" })}>
-          Filter zurücksetzen
+        <p>Kein Foto passt zu Filter und Sammlung.</p>
+        <Knopf
+          art="rahmen"
+          onClick={() => {
+            useBibliothek.getState().setzeSammlung("alle");
+            useBibliothek.getState().setzeFilter({ bewertung: 0, markierung: "", art: "", farbe: "", suche: "" });
+          }}
+        >
+          Alles zeigen
         </Knopf>
       </div>
     );

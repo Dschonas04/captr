@@ -261,3 +261,72 @@ export function zuschnittFuer(verhaeltnis: number, gb: number, gh: number): Zusc
   const b = verhaeltnis / bild;
   return { x: (1 - b) / 2, y: 0, b, h: 1 };
 }
+
+// ---------- Beschreibung für Protokoll und Bibliothek ----------
+
+const REGLERNAMEN: [keyof Einstellungen, string][] = [
+  ["temperatur", "Temperatur"],
+  ["toenung", "Tönung"],
+  ["belichtung", "Belichtung"],
+  ["kontrast", "Kontrast"],
+  ["lichter", "Lichter"],
+  ["tiefen", "Tiefen"],
+  ["weiss", "Weiß"],
+  ["schwarz", "Schwarz"],
+  ["klarheit", "Klarheit"],
+  ["dunst", "Dunst entfernen"],
+  ["dynamik", "Dynamik"],
+  ["saettigung", "Sättigung"],
+  ["schaerfe", "Schärfen"],
+  ["vignette", "Vignette"],
+  ["koernung", "Körnung"],
+  ["winkel", "Winkel"],
+];
+
+function zahlText(k: keyof Einstellungen, v: number): string {
+  if (k === "belichtung") return `${v > 0 ? "+" : ""}${v.toFixed(2).replace(".", ",")}`;
+  if (k === "winkel") return `${v.toFixed(1).replace(".", ",")}°`;
+  return `${v > 0 ? "+" : ""}${Math.round(v)}`;
+}
+
+const gleich = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+// Alle Abweichungen vom Ausgangszustand, als Name und Wert.
+export function abweichungen(e: Einstellungen): [string, string][] {
+  const s = standard();
+  const liste: [string, string][] = [];
+  for (const [k, n] of REGLERNAMEN) {
+    const v = e[k] as number;
+    if (v !== s[k]) liste.push([n, zahlText(k, v)]);
+  }
+  if (!gleich(e.kurven, s.kurven)) liste.push(["Gradationskurve", "angepasst"]);
+  for (const [k, n] of [
+    ["farbton", "Farbton"],
+    ["farbsaettigung", "Farbsättigung"],
+    ["farbluminanz", "Farbluminanz"],
+  ] as const) {
+    const zahl = e[k].filter((v) => v !== 0).length;
+    if (zahl) liste.push([n, `${zahl} ${zahl === 1 ? "Bereich" : "Bereiche"}`]);
+  }
+  if (!gleich(e.zuschnitt, s.zuschnitt)) liste.push(["Zuschnitt", e.seitenverhaeltnis === "original" || e.seitenverhaeltnis === "frei" ? "frei" : e.seitenverhaeltnis]);
+  if (e.vierteldrehung) liste.push(["Drehung", `${e.vierteldrehung * 90}°`]);
+  if (e.spiegeln) liste.push(["Gespiegelt", "ja"]);
+  return liste;
+}
+
+// Ein Schritt im Protokoll: was sich von alt nach neu geändert hat.
+export function beschreibe(alt: Einstellungen, neu: Einstellungen): string {
+  const geaendert: string[] = [];
+  for (const [k, n] of REGLERNAMEN) {
+    if (alt[k] !== neu[k]) geaendert.push(`${n} ${zahlText(k, neu[k] as number)}`);
+  }
+  if (!gleich(alt.kurven, neu.kurven)) geaendert.push("Gradationskurve");
+  if (!gleich(alt.farbton, neu.farbton) || !gleich(alt.farbsaettigung, neu.farbsaettigung) || !gleich(alt.farbluminanz, neu.farbluminanz))
+    geaendert.push("Farbe (HSL)");
+  if (!gleich(alt.zuschnitt, neu.zuschnitt) || alt.seitenverhaeltnis !== neu.seitenverhaeltnis) geaendert.push("Zuschnitt");
+  if (alt.vierteldrehung !== neu.vierteldrehung) geaendert.push("Drehung");
+  if (alt.spiegeln !== neu.spiegeln) geaendert.push("Spiegeln");
+  if (!geaendert.length) return "Keine Änderung";
+  if (gleich(neu, standard())) return "Zurückgesetzt";
+  return geaendert.length > 2 ? `${geaendert.length} Einstellungen` : geaendert.join(", ");
+}

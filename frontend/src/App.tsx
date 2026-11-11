@@ -100,37 +100,36 @@ export default function App() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex h-12 shrink-0 items-center gap-6 border-b border-linie bg-grund px-4">
-        <Logo />
-        <nav className="flex h-full items-stretch gap-1" aria-label="Bereiche">
-          {reiter.map((r) => (
-            <a
-              key={r.name}
-              href={r.href}
-              aria-current={r.an ? "page" : undefined}
-              className={cx(
-                "relative flex items-center px-3 text-[13px] transition-colors",
-                r.an ? "text-text" : "text-text-3 hover:text-text-2",
-              )}
-            >
-              {r.name}
-              {r.an && <span className="absolute inset-x-3 bottom-0 h-[2px] rounded-full bg-licht" />}
-            </a>
-          ))}
-        </nav>
-        <div className="ml-auto flex items-center gap-2">
+      <header className="flex h-[52px] shrink-0 items-center gap-4 border-b border-black/60 bg-[#101010] px-4">
+        <div className="flex flex-col justify-center">
+          <Logo />
           {ssoStatus?.nutzer && (
-            <span className="text-[12px] text-text-3">
+            <span className="ml-7 mt-0.5 text-[11px] leading-none text-text-3">
               {ssoStatus.nutzer.name || ssoStatus.nutzer.nutzer} ·{" "}
               <a className="hover:text-text-2" href="/sso/abmelden">
                 Abmelden
               </a>
             </span>
           )}
-          <SymbolKnopf onClick={() => setEinstellungen(true)} aria-label="Einstellungen" title="Einstellungen">
-            <Settings size={16} />
-          </SymbolKnopf>
         </div>
+        {/* Modulwahl rechts, durch Striche getrennt */}
+        <nav className="ml-auto flex items-center" aria-label="Module">
+          {reiter.map((r, i) => (
+            <span key={r.name} className="flex items-center">
+              {i > 0 && <span className="px-2.5 text-[15px] text-text-3/50" aria-hidden>|</span>}
+              <a
+                href={r.href}
+                aria-current={r.an ? "page" : undefined}
+                className={cx("text-[15.5px] tracking-tight transition-colors", r.an ? "font-medium text-text" : "text-text-3 hover:text-text-2")}
+              >
+                {r.name}
+              </a>
+            </span>
+          ))}
+        </nav>
+        <SymbolKnopf className="ml-2" onClick={() => setEinstellungen(true)} aria-label="Einstellungen" title="Einstellungen">
+          <Settings size={16} />
+        </SymbolKnopf>
       </header>
       {einstellungen && <SSODialog status={ssoStatus} onSchliessen={() => setEinstellungen(false)} />}
       <main className="min-h-0 flex-1">

@@ -80,6 +80,14 @@ Tests: `go test ./...` in `backend/`, `npx tsc --noEmit` in `frontend/`.
 | Enter, D | Entwickeln | ← / → | voriges / nächstes Foto |
 | Entf | Löschen | Strg+Z | Rückgängig |
 | Strg+A | alle wählen | Strg+Umschalt+C / V | Einstellungen kopieren / einfügen |
+| G / E | Raster / Lupe | I | Info im Bild ein/aus |
+| Tab | Seitenleisten ein/aus | Tab | Seitenleisten ein/aus |
+| F6 | Filmstreifen ein/aus | F6 | Filmstreifen ein/aus |
+
+Die Oberfläche folgt dem Aufbau klassischer Fotoverwaltungen: links Navigator,
+Katalog und Sammlungen nach Datum und Kamera bzw. Vorgaben und Protokoll,
+rechts Histogramm, Metadaten und die Regler, unten Werkzeugleiste und
+Filmstreifen.
 
 ## Lizenz
 
