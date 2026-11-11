@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -149,7 +150,7 @@ func TestBilderAblauf(t *testing.T) {
 	// Bildpunkte
 	res, _ = http.Get(s.URL + "/api/bilder/" + b.ID + "/pixel?max=1024")
 	daten, _ := io.ReadAll(res.Body) // der Client entpackt gzip selbst
-	if len(daten) < 12 || string(daten[:4]) != "CPX1" {
+	if len(daten) < 12 || string(daten[:4]) != "CPX2" {
 		// Go entpackt nur, wenn es selbst gzip angefragt hat; hier von Hand
 		gz, err := gzip.NewReader(bytes.NewReader(daten))
 		if err != nil {
@@ -157,8 +158,11 @@ func TestBilderAblauf(t *testing.T) {
 		}
 		daten, _ = io.ReadAll(gz)
 	}
-	if string(daten[:4]) != "CPX1" || binary.LittleEndian.Uint32(daten[4:]) != 600 || len(daten) != 12+600*300*6 {
+	if string(daten[:4]) != "CPX2" || binary.LittleEndian.Uint32(daten[4:]) != 600 || len(daten) != 12+600*300*6 {
 		t.Fatalf("CPX: %q %d", daten[:4], len(daten))
+	}
+	if _, err := leseCPX(daten); err != nil {
+		t.Fatal(err)
 	}
 
 	// bewerten und Einstellungen
@@ -287,5 +291,28 @@ func TestKennwort(t *testing.T) {
 	// Oberflaeche: unbekannter Weg liefert index.html
 	if res, _ := http.Get(s.URL + "/entwickeln/abc"); res.StatusCode != 200 {
 		t.Fatalf("SPA: %d", res.StatusCode)
+	}
+}
+
+func TestCPXHinUndZurueck(t *testing.T) {
+	p := &Pixel{B: 7, H: 3, D: make([]uint16, 7*3*3)}
+	for i := range p.D {
+		p.D[i] = uint16((i * 7919) % 65536)
+	}
+	pfad := filepath.Join(t.TempDir(), "x.cpx2.gz")
+	if err := schreibeCPX(pfad, p); err != nil {
+		t.Fatal(err)
+	}
+	f, _ := os.Open(pfad)
+	gz, _ := gzip.NewReader(f)
+	daten, _ := io.ReadAll(gz)
+	q, err := leseCPX(daten)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, v := range p.D {
+		if q.D[i]>>4 != v>>4 {
+			t.Fatalf("Wert %d: %d statt %d", i, q.D[i], v)
+		}
 	}
 }

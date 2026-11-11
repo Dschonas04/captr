@@ -200,10 +200,29 @@ export async function ladePixel(id: string, max: number, signal?: AbortSignal): 
   }
   const puffer = await res.arrayBuffer();
   const kopf = new DataView(puffer, 0, 12);
-  if (String.fromCharCode(...new Uint8Array(puffer, 0, 4)) !== "CPX1") throw new Error("unbekanntes Format");
+  const art = String.fromCharCode(...new Uint8Array(puffer, 0, 4));
   const breite = kopf.getUint32(4, true);
   const hoehe = kopf.getUint32(8, true);
-  return { breite, hoehe, daten: new Uint16Array(puffer, 12, breite * hoehe * 3) };
+  const n = breite * hoehe * 3;
+  if (art === "CPX1") return { breite, hoehe, daten: new Uint16Array(puffer, 12, n) };
+  if (art !== "CPX2" || puffer.byteLength < 12 + 2 * n) throw new Error("unbekanntes Format");
+  // 12 Bit, je Zeile und Kanal als Abstand zum linken Nachbarn, hohe und tiefe Bytes getrennt
+  const hoch = new Uint8Array(puffer, 12, n);
+  const tief = new Uint8Array(puffer, 12 + n, n);
+  const daten = new Uint16Array(n);
+  const zeile = breite * 3;
+  for (let y = 0; y < hoehe; y++) {
+    let r = 0, g = 0, b = 0;
+    for (let i = y * zeile, ende = i + zeile; i < ende; i += 3) {
+      r = (r + ((hoch[i] << 8) | tief[i])) & 0xffff;
+      g = (g + ((hoch[i + 1] << 8) | tief[i + 1])) & 0xffff;
+      b = (b + ((hoch[i + 2] << 8) | tief[i + 2])) & 0xffff;
+      daten[i] = (r << 4) | (r >> 8);
+      daten[i + 1] = (g << 4) | (g >> 8);
+      daten[i + 2] = (b << 4) | (b >> 8);
+    }
+  }
+  return { breite, hoehe, daten };
 }
 
 export function formatiereBelichtung(s: number): string {

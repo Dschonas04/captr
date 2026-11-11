@@ -85,7 +85,7 @@ export function aufAlle(ids: string[], aendern: Aenderung, was: string): Promise
       try {
         const bild = b ?? (await api.bild(id));
         const alt = vervollstaendige(bild.einstellungen);
-        en.setzeBild(await ladePixel(id, 2048));
+        en.setzeBild(await ladePixel(id, 2560));
         const neu = aendern(alt, en);
         const bearbeitet = !istStandard(neu);
         if (bearbeitet) await vorschauenSchreiben(en, id, neu);

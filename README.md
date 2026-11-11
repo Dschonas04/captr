@@ -22,8 +22,11 @@ Server. Ähnlich wie Lightroom, nur ohne Abo und ohne Cloud.
 ## Wie es funktioniert
 
 Der Dienst (Go) nimmt die Dateien an, liest die Aufnahmedaten mit ExifTool,
-entwickelt RAWs mit LibRaw und liefert die Bildpunkte mit 16 Bit je Kanal an
-den Browser. Dort läuft die ganze Entwicklung als WebGL2-Shader auf der
+entwickelt RAWs mit LibRaw und liefert die Bildpunkte an den Browser – erst
+eine kleine Fassung (1024 px) zum sofortigen Arbeiten, dann die scharfe
+(2560 px), für die Lupe die volle Auflösung. Beide Arbeitsgrößen entstehen
+schon beim Import; übertragen wird mit 12 Bit je Kanal, mehr kommt in der
+Halbfloat-Textur ohnehin nicht an. Dort läuft die ganze Entwicklung als WebGL2-Shader auf der
 Grafikkarte: jeder Regler ist nur ein Parameter, das Bild reagiert ohne
 Verzögerung. Gespeichert werden nur die Einstellungen; das Original bleibt
 unberührt. Das Freistellen übernimmt [rembg](https://github.com/danielgatis/rembg)

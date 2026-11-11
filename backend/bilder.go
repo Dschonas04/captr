@@ -12,6 +12,7 @@ import (
 	"image/color"
 	"image/jpeg"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -368,8 +369,14 @@ func schreibeJPEG(pfad string, p *Pixel, qualitaet int) error {
 	return os.Rename(tmp, pfad)
 }
 
-// Das Format, in dem die Oberflaeche Bildpunkte bekommt: "CPX1", Breite und
-// Hoehe als uint32, dann RGB als uint16, alles little-endian, gzip-komprimiert.
+// Das Format, in dem die Oberflaeche Bildpunkte bekommt: "CPX2", Breite und
+// Hoehe als uint32 little-endian, dann die Bildpunkte, gzip-komprimiert.
+//
+// Die Bildpunkte gehen mit 12 Bit: Die Grafikkarte rechnet ohnehin in
+// Halbfloat (10 Bit Mantisse), mehr kommt dort nicht an. Damit gzip bei
+// verrauschten RAWs ueberhaupt etwas findet, steht je Kanal nur der Abstand
+// zum linken Nachbarn da (modulo 2^16), und alle hohen Bytes kommen vor allen
+// niedrigen. Das macht die Uebertragung gut ein Drittel kleiner.
 func schreibeCPX(pfad string, p *Pixel) error {
 	tmp := pfad + ".tmp"
 	f, err := os.Create(tmp)
@@ -379,15 +386,29 @@ func schreibeCPX(pfad string, p *Pixel) error {
 	gz, _ := gzip.NewWriterLevel(f, gzip.BestSpeed)
 	w := bufio.NewWriterSize(gz, 1<<20)
 	kopf := make([]byte, 12)
-	copy(kopf, "CPX1")
+	copy(kopf, "CPX2")
 	binary.LittleEndian.PutUint32(kopf[4:], uint32(p.B))
 	binary.LittleEndian.PutUint32(kopf[8:], uint32(p.H))
 	_, _ = w.Write(kopf)
-	puffer := make([]byte, 2)
-	for _, v := range p.D {
-		binary.LittleEndian.PutUint16(puffer, v)
-		_, _ = w.Write(puffer)
+	n := len(p.D)
+	hoch := make([]byte, n)
+	tief := make([]byte, n)
+	for y := 0; y < p.H; y++ {
+		var vor [3]uint16
+		zeile := y * p.B * 3
+		for x := 0; x < p.B; x++ {
+			for c := 0; c < 3; c++ {
+				i := zeile + x*3 + c
+				q := p.D[i] >> 4
+				d := q - vor[c]
+				vor[c] = q
+				hoch[i] = byte(d >> 8)
+				tief[i] = byte(d)
+			}
+		}
 	}
+	_, _ = w.Write(hoch)
+	_, _ = w.Write(tief)
 	if err := w.Flush(); err != nil {
 		f.Close()
 		return err
@@ -400,6 +421,32 @@ func schreibeCPX(pfad string, p *Pixel) error {
 		return err
 	}
 	return os.Rename(tmp, pfad)
+}
+
+// leseCPX ist die Umkehrung (fuer Tests): liefert 12 Bit auf 16 Bit gestreckt.
+func leseCPX(daten []byte) (*Pixel, error) {
+	if len(daten) < 12 || string(daten[:4]) != "CPX2" {
+		return nil, fmt.Errorf("kein CPX2")
+	}
+	b, h := int(binary.LittleEndian.Uint32(daten[4:])), int(binary.LittleEndian.Uint32(daten[8:]))
+	n := b * h * 3
+	if len(daten) != 12+2*n {
+		return nil, fmt.Errorf("CPX2: %d Bytes statt %d", len(daten), 12+2*n)
+	}
+	hoch, tief := daten[12:12+n], daten[12+n:]
+	p := &Pixel{B: b, H: h, D: make([]uint16, n)}
+	for y := 0; y < h; y++ {
+		var vor [3]uint16
+		for x := 0; x < b; x++ {
+			for c := 0; c < 3; c++ {
+				i := (y*b+x)*3 + c
+				q := vor[c] + (uint16(hoch[i])<<8 | uint16(tief[i]))
+				vor[c] = q
+				p.D[i] = q<<4 | q>>8
+			}
+		}
+	}
+	return p, nil
 }
 
 // ---------- Aufnahmedaten ----------
@@ -556,6 +603,8 @@ func (w *Werkstatt) NimmAuf(ctx context.Context, name string, r io.Reader, maxBy
 		aufraeumen()
 		return nil, err
 	}
+	// Arbeitskopien fuer Entwickeln, damit das erste Oeffnen nicht wartet
+	w.legeArbeitskopienAn(b.ID, p, -1)
 	return b, nil
 }
 
@@ -567,10 +616,18 @@ func (w *Werkstatt) bauVorschauen(id string, p *Pixel) error {
 	return schreibeJPEG(w.ablage.Pfad("mini", id+".jpg"), Verkleinere(v, 480), 82)
 }
 
+// Arbeitsgroessen, in denen die Oberflaeche Bildpunkte holt: erst die kleine
+// zum sofortigen Arbeiten, dann die scharfe; 0 ist die volle Groesse fuer die Lupe.
+var arbeitsgroessen = []int{1024, 2560}
+
+func (w *Werkstatt) pixelPfad(id string, max int) string {
+	return w.ablage.Pfad("pixel", fmt.Sprintf("%s-%d.cpx2.gz", id, max))
+}
+
 // PixelDatei liefert den Pfad der zwischengespeicherten Bildpunkte in der
 // gewuenschten Groesse und legt sie bei Bedarf an. max 0 heisst volle Groesse.
 func (w *Werkstatt) PixelDatei(ctx context.Context, b *Bild, max int) (string, error) {
-	pfad := w.ablage.Pfad("pixel", fmt.Sprintf("%s-%d.cpx.gz", b.ID, max))
+	pfad := w.pixelPfad(b.ID, max)
 	if _, err := os.Stat(pfad); err == nil {
 		return pfad, nil
 	}
@@ -586,17 +643,47 @@ func (w *Werkstatt) PixelDatei(ctx context.Context, b *Bild, max int) (string, e
 	if b.Art != "raw" && b.Art != "heic" {
 		ausrichtung = LiesAufnahme(ctx, w.ablage.Pfad("originale", b.Datei), &Bild{})
 	}
-	p, err := Entwickle(ctx, w.ablage.Pfad("originale", b.Datei), b.Art, false, ausrichtung)
+	// Fuer die Arbeitsgroessen reicht ein RAW in halber Aufloesung, solange es
+	// dann noch fast so gross ist wie verlangt; das geht gut doppelt so schnell.
+	lang := b.Breite
+	if b.Hoehe > lang {
+		lang = b.Hoehe
+	}
+	halb := b.Art == "raw" && max > 0 && float64(lang)/2 >= float64(max)*0.85
+	p, err := Entwickle(ctx, w.ablage.Pfad("originale", b.Datei), b.Art, halb, ausrichtung)
 	if err != nil {
 		return "", err
 	}
-	if b.Art == "raw" && (p.B != b.Breite || p.H != b.Hoehe) {
+	if b.Art == "raw" && !halb && (p.B != b.Breite || p.H != b.Hoehe) {
 		_ = w.ablage.SetzeGroesse(b.ID, p.B, p.H)
 	}
 	if err := schreibeCPX(pfad, Verkleinere(p, max)); err != nil {
 		return "", err
 	}
+	// was bei derselben Entwicklung abfaellt, gleich mit ablegen
+	w.legeArbeitskopienAn(b.ID, p, max)
 	return pfad, nil
+}
+
+// legeArbeitskopienAn schreibt die fehlenden Arbeitsgroessen aus p, soweit p
+// dafuer gross genug ist (ausser).
+func (w *Werkstatt) legeArbeitskopienAn(id string, p *Pixel, ausser int) {
+	lang := p.B
+	if p.H > lang {
+		lang = p.H
+	}
+	for _, g := range arbeitsgroessen {
+		if g == ausser || (float64(lang) < float64(g)*0.85 && g != arbeitsgroessen[0]) {
+			continue
+		}
+		ziel := w.pixelPfad(id, g)
+		if _, err := os.Stat(ziel); err == nil {
+			continue
+		}
+		if err := schreibeCPX(ziel, Verkleinere(p, g)); err != nil {
+			log.Printf("Arbeitskopie %s-%d: %v", id, g, err)
+		}
+	}
 }
 
 func (a *Ablage) SetzeGroesse(id string, b, h int) error {

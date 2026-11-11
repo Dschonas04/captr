@@ -41,6 +41,7 @@ import { Entwickler, automatisch, bildAlsBlob, type Histogramm } from "./gpu";
 import Kurve, { HistogrammAnzeige } from "./Kurve";
 
 const VORSCHAU_MAX = 2560;
+const KLEIN_MAX = 1024;
 
 
 function Abschnitt(p: { titel: string; children: ReactNode; offen?: boolean; rechts?: ReactNode }) {
@@ -471,6 +472,7 @@ export default function Entwickeln({ id }: { id: string }) {
   const speicherUhr = useRef<number | undefined>(undefined);
   const vorschauUhr = useRef<number | undefined>(undefined);
   const offen = useRef<{ id: string; e: Einstellungen } | null>(null);
+  const vollDa = useRef(false);
 
   const schreibeVorschauen = useCallback(async (bid: string, einst: Einstellungen) => {
     const en = entw.current;
@@ -561,12 +563,29 @@ export default function Entwickeln({ id }: { id: string }) {
       setE(einst);
       verlauf.current = { liste: [JSON.stringify(einst)], i: 0 };
       setProtokollStand((n) => n + 1);
+      // erst eine kleine Fassung zum sofortigen Arbeiten, dann die scharfe
+      vollDa.current = false;
+      const kleinLaden = ladePixel(id, KLEIN_MAX, ctrl.signal);
+      const scharf = ladePixel(id, VORSCHAU_MAX, ctrl.signal);
+      scharf.catch(() => {});
       try {
-        const px = await ladePixel(id, VORSCHAU_MAX, ctrl.signal);
+        const klein = await kleinLaden;
         if (abbruch || nr !== ladeNr.current || !entw.current) return;
+        const fertig = Math.max(klein.breite, klein.hoehe) < KLEIN_MAX;
+        entw.current.setzeBild(klein);
+        setTex([klein.breite, klein.hoehe]);
+        setVoll(fertig);
+        setBereit(true);
+        if (fertig) return;
+      } catch (err) {
+        if (abbruch || (err as Error).name === "AbortError") return;
+      }
+      try {
+        const px = await scharf;
+        if (abbruch || nr !== ladeNr.current || !entw.current || vollDa.current) return;
         entw.current.setzeBild(px);
         setTex([px.breite, px.hoehe]);
-        setVoll(Math.max(px.breite, px.hoehe) < VORSCHAU_MAX);
+        setVoll((v) => v || Math.max(px.breite, px.hoehe) < VORSCHAU_MAX);
         setBereit(true);
       } catch (err) {
         if (!abbruch && (err as Error).name !== "AbortError") setFehler((err as Error).message);
@@ -588,6 +607,7 @@ export default function Entwickeln({ id }: { id: string }) {
     ladePixel(bild.id, 0, ctrl.signal).then(
       (px) => {
         if (nr !== ladeNr.current || !entw.current) return;
+        vollDa.current = true;
         entw.current.setzeBild(px);
         setTex([px.breite, px.hoehe]);
         setVoll(true);
