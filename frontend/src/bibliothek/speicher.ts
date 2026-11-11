@@ -43,7 +43,8 @@ function gespeicherterFilter(): Filter {
 }
 
 interface Bibliothek {
-  bilder: Bild[];
+  bilder: Bild[]; // nach Filter
+  alle: Bild[]; // ohne Filter und Sammlung, fuer den Filmstreifen
   geladen: boolean;
   filter: Filter;
   auswahl: string[]; // markierte Kennungen, die erste ist die aktive
@@ -54,12 +55,13 @@ interface Bibliothek {
   ersetze: (b: Bild) => void;
   fuegeHinzu: (b: Bild[]) => void;
   entferne: (id: string) => void;
-  waehle: (id: string, art?: "einzeln" | "dazu" | "bereich") => void;
+  waehle: (id: string, art?: "einzeln" | "dazu" | "bereich", liste?: Bild[]) => void;
   aendere: (ids: string[], ae: Parameters<typeof api.aendern>[1]) => Promise<void>;
 }
 
 export const useBibliothek = create<Bibliothek>((set, get) => ({
   bilder: [],
+  alle: [],
   geladen: false,
   filter: gespeicherterFilter(),
   auswahl: [],
@@ -90,20 +92,27 @@ export const useBibliothek = create<Bibliothek>((set, get) => ({
   },
   laden: async () => {
     try {
-      const bilder = await api.bilder(get().filter);
-      const da = new Set(bilder.map((b) => b.id));
-      set({ bilder, geladen: true, auswahl: get().auswahl.filter((id) => da.has(id)) });
+      const f = get().filter;
+      const ohneFilter = !f.bewertung && !f.markierung && !f.art && !f.farbe && !f.suche;
+      const [bilder, alle] = await Promise.all([api.bilder(f), ohneFilter ? null : api.bilder({ ordnung: f.ordnung })]);
+      const da = new Set((alle ?? bilder).map((b) => b.id));
+      set({ bilder, alle: alle ?? bilder, geladen: true, auswahl: get().auswahl.filter((id) => da.has(id)) });
     } catch (e) {
       set({ geladen: true });
       melde("Bibliothek nicht geladen: " + (e as Error).message, "fehler");
     }
   },
-  ersetze: (b) => set({ bilder: get().bilder.map((x) => (x.id === b.id ? b : x)) }),
-  fuegeHinzu: (neu) => set({ bilder: [...neu, ...get().bilder.filter((b) => !neu.some((n) => n.id === b.id))] }),
-  entferne: (id) => set({ bilder: get().bilder.filter((b) => b.id !== id), auswahl: get().auswahl.filter((x) => x !== id) }),
-  waehle: (id, art = "einzeln") => {
+  ersetze: (b) => set({ bilder: get().bilder.map((x) => (x.id === b.id ? b : x)), alle: get().alle.map((x) => (x.id === b.id ? b : x)) }),
+  fuegeHinzu: (neu) =>
+    set({
+      bilder: [...neu, ...get().bilder.filter((b) => !neu.some((n) => n.id === b.id))],
+      alle: [...neu, ...get().alle.filter((b) => !neu.some((n) => n.id === b.id))],
+    }),
+  entferne: (id) =>
+    set({ bilder: get().bilder.filter((b) => b.id !== id), alle: get().alle.filter((b) => b.id !== id), auswahl: get().auswahl.filter((x) => x !== id) }),
+  waehle: (id, art = "einzeln", liste) => {
     const { auswahl } = get();
-    const bilder = sichtbar(get().bilder, get().sammlung);
+    const bilder = liste ?? sichtbar(get().bilder, get().sammlung);
     if (art === "dazu") {
       set({ auswahl: auswahl.includes(id) ? auswahl.filter((x) => x !== id) : [id, ...auswahl] });
     } else if (art === "bereich" && auswahl.length) {
@@ -120,7 +129,7 @@ export const useBibliothek = create<Bibliothek>((set, get) => ({
     try {
       const neu = await Promise.all(ids.map((id) => api.aendern(id, ae)));
       const karte = new Map(neu.map((b) => [b.id, b]));
-      set({ bilder: get().bilder.map((b) => karte.get(b.id) ?? b) });
+      set({ bilder: get().bilder.map((b) => karte.get(b.id) ?? b), alle: get().alle.map((b) => karte.get(b.id) ?? b) });
     } catch (e) {
       melde((e as Error).message, "fehler");
     }

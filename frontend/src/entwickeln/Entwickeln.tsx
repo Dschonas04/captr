@@ -17,9 +17,10 @@ import {
   X,
 } from "lucide-react";
 import { api, formatiereBelichtung, ladePixel, miniUrl, vorschauUrl, type Bild, type Vorlage } from "../api";
-import { sichtbar, useBibliothek } from "../bibliothek/speicher";
-import { sammlungName } from "../bibliothek/Bibliothek";
-import { Filmstreifen, HistogrammPanel, Navigator, Panel, Seitenleiste, exifTeile, useLeistenTasten } from "../lr";
+import { useBibliothek } from "../bibliothek/speicher";
+import { fotoMenue } from "../bibliothek/menue";
+import { EINGEBAUT, ablage, aufAlle, kopiere, mitVorgabe } from "./stapel";
+import { Filmstreifen, HistogrammPanel, Navigator, Panel, Seitenleiste, exifTeile, useLeistenTasten, useMenue } from "../lr";
 import { Dialog, Feld, Knopf, Laedt, Regler, Sterne, SymbolKnopf, cx, eingabe, frage, melde } from "../ui";
 import {
   FARBBEREICHE,
@@ -41,15 +42,6 @@ import Kurve, { HistogrammAnzeige } from "./Kurve";
 
 const VORSCHAU_MAX = 2560;
 
-const EINGEBAUT: { name: string; e: Partial<Einstellungen> }[] = [
-  { name: "Schwarzweiß", e: { saettigung: -100, dynamik: 0, kontrast: 18, klarheit: 12 } },
-  { name: "Schwarzweiß hart", e: { saettigung: -100, kontrast: 45, klarheit: 30, schwarz: -15, weiss: 10, koernung: 18 } },
-  { name: "Kräftig", e: { dynamik: 35, kontrast: 18, klarheit: 15, dunst: 8 } },
-  { name: "Matt", e: { kontrast: -12, kurven: { rgb: [[0, 0.08], [0.5, 0.5], [1, 0.94]], r: [[0, 0], [1, 1]], g: [[0, 0], [1, 1]], b: [[0, 0], [1, 1]] }, saettigung: -10 } },
-  { name: "Warm", e: { temperatur: 22, toenung: 6, dynamik: 10 } },
-  { name: "Kühl", e: { temperatur: -20, toenung: -4 } },
-  { name: "Film", e: { kontrast: 10, lichter: -25, tiefen: 20, saettigung: -12, koernung: 25, vignette: -18, kurven: { rgb: [[0, 0.05], [0.25, 0.22], [0.75, 0.8], [1, 0.96]], r: [[0, 0], [1, 1]], g: [[0, 0], [1, 1]], b: [[0, 0.04], [1, 0.97]] } } },
-];
 
 function Abschnitt(p: { titel: string; children: ReactNode; offen?: boolean; rechts?: ReactNode }) {
   return <Panel {...p} seite="rechts" />;
@@ -411,7 +403,6 @@ function Protokoll({ liste, i, onWaehlen }: { liste: string[]; i: number; onWaeh
 
 // ---------- Seite ----------
 
-let zwischenablage: Partial<Einstellungen> | null = null;
 // Einstellungen des zuletzt bearbeiteten Fotos, für "Vorherige"
 let vorherige: { id: string; e: Partial<Einstellungen> } | null = null;
 
@@ -432,8 +423,15 @@ export default function Entwickeln({ id }: { id: string }) {
   const [flaeche, setFlaeche] = useState<[number, number]>([800, 600]);
   const [info, setInfo] = useState(true);
   const [, setProtokollStand] = useState(0);
-  const sammlung = useBibliothek((s) => s.sammlung);
-  const liste = useMemo(() => sichtbar(bilder, sammlung), [bilder, sammlung]);
+  // der Filmstreifen zeigt immer alle Fotos
+  const liste = useBibliothek((s) => s.alle);
+  const auswahl = useBibliothek((s) => s.auswahl);
+  const zeigeMenue = useMenue((s) => s.zeige);
+  // das offene Foto ist immer gewaehlt und steht vorn
+  useEffect(() => {
+    const a = useBibliothek.getState().auswahl;
+    if (a[0] !== id) useBibliothek.setState({ auswahl: a.includes(id) ? [id, ...a.filter((x) => x !== id)] : [id] });
+  }, [id]);
   useLeistenTasten();
 
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -715,8 +713,7 @@ export default function Entwickeln({ id }: { id: string }) {
 
   const index = liste.findIndex((b) => b.id === id);
   const geheZu = useCallback((r: number) => {
-    const st = useBibliothek.getState();
-    const l = sichtbar(st.bilder, st.sammlung);
+    const l = useBibliothek.getState().alle;
     const i = l.findIndex((b) => b.id === id);
     const n = l[i + r];
     if (n) location.hash = `#/entwickeln/${n.id}`;
@@ -740,13 +737,13 @@ export default function Entwickeln({ id }: { id: string }) {
       }
       if (mod && ev.shiftKey && k === "c") {
         ev.preventDefault();
-        zwischenablage = ohneGeometrie(eRef.current);
+        kopiere(eRef.current, bild?.name ?? "");
         melde("Einstellungen kopiert");
         return;
       }
       if (mod && ev.shiftKey && k === "v") {
         ev.preventDefault();
-        if (zwischenablage) anwenden(zwischenablage);
+        if (ablage.e) anwenden(ablage.e);
         return;
       }
       if (mod || ev.altKey) return;
@@ -772,6 +769,31 @@ export default function Entwickeln({ id }: { id: string }) {
   });
 
   const aktuell = bilder.find((b) => b.id === id) ?? bild;
+  const andere = auswahl.filter((x) => x !== id);
+
+  const synchronisieren = () => {
+    const teil = ohneGeometrie(eRef.current);
+    void aufAlle(andere, (alt) => mitVorgabe(alt, teil), "Synchronisiert");
+  };
+
+  // Rechtsklick: Menue fuer die Auswahl; das offene Foto aendert die Seite selbst
+  const menue = (b: Bild, ev: React.MouseEvent) => {
+    const gewaehlt = useBibliothek.getState().auswahl;
+    // gehoert das Foto zur Auswahl, gilt das Menue fuer alle gewaehlten, sonst nur fuer dieses
+    const ids = gewaehlt.includes(b.id) ? [b.id, ...gewaehlt.filter((x) => x !== b.id)] : [b.id];
+    zeigeMenue(
+      ev,
+      fotoMenue(ids, useBibliothek.getState().alle.find((x) => x.id === b.id) ?? b, {
+        offen: {
+          id,
+          aendern: (f, _was, automatik) => {
+            if (automatik) auto();
+            else setze(f(eRef.current), true);
+          },
+        },
+      }),
+    );
+  };
 
   return (
     <div className="flex h-full min-h-0">
@@ -785,7 +807,7 @@ export default function Entwickeln({ id }: { id: string }) {
               className="h-7 flex-1 px-2 text-[12px]"
               title="Einstellungen kopieren (Strg+Umschalt+C)"
               onClick={() => {
-                zwischenablage = ohneGeometrie(e);
+                kopiere(e, bild?.name ?? "");
                 melde("Einstellungen kopiert – mit „Einfügen“ oder Strg+Umschalt+V übertragen");
               }}
             >
@@ -795,8 +817,8 @@ export default function Entwickeln({ id }: { id: string }) {
               art="rahmen"
               className="h-7 flex-1 px-2 text-[12px]"
               title="Einstellungen einfügen (Strg+Umschalt+V)"
-              disabled={!zwischenablage}
-              onClick={() => zwischenablage && anwenden(zwischenablage)}
+              disabled={!ablage.e}
+              onClick={() => ablage.e && anwenden(ablage.e)}
             >
               <ClipboardPaste size={13} /> Einfügen
             </Knopf>
@@ -835,6 +857,7 @@ export default function Entwickeln({ id }: { id: string }) {
                 <img src={vorschauUrl(bild, true)} alt="" className="absolute inset-0 h-full w-full object-contain opacity-70" />
               )}
               <canvas
+                onContextMenu={(ev) => bild && !zuschneiden && menue(bild, ev)}
                 ref={canvas}
                 className={cx("block h-full w-full", !bereit && "invisible", !zuschneiden && (lupe ? "cursor-zoom-out" : "cursor-zoom-in"))}
                 style={{ width: cssB, height: cssH }}
@@ -957,8 +980,18 @@ export default function Entwickeln({ id }: { id: string }) {
         <Filmstreifen
           bilder={liste}
           aktiv={id}
-          quelle={sammlungName(sammlung)}
-          onKlick={(b) => (location.hash = `#/entwickeln/${b.id}`)}
+          auswahl={auswahl}
+          quelle="Alle Fotos"
+          onKlick={(b, ev) => {
+            // Strg/Umschalt waehlt dazu, ohne das Foto zu wechseln
+            if (ev.ctrlKey || ev.metaKey || ev.shiftKey) {
+              if (b.id === id) return;
+              useBibliothek.getState().waehle(b.id, ev.shiftKey ? "bereich" : "dazu", liste);
+              const a = useBibliothek.getState().auswahl;
+              useBibliothek.setState({ auswahl: [id, ...a.filter((x) => x !== id)] });
+            } else location.hash = `#/entwickeln/${b.id}`;
+          }}
+          onKontext={(b, ev) => menue(b, ev)}
         />
       </div>
       {/* Regler */}
@@ -967,15 +1000,26 @@ export default function Entwickeln({ id }: { id: string }) {
         breite={300}
         fuss={
           <div className="flex gap-1.5">
-            <Knopf
-              art="rahmen"
-              className="h-7 flex-1 px-2 text-[12px]"
-              disabled={!vorherige || vorherige.id === id}
-              title="Einstellungen des zuvor bearbeiteten Fotos übernehmen (ohne Zuschnitt)"
-              onClick={() => vorherige && anwenden(vorherige.e)}
-            >
-              Vorherige
-            </Knopf>
+            {andere.length ? (
+              <Knopf
+                art="licht"
+                className="h-7 flex-1 px-2 text-[12px]"
+                title="Einstellungen dieses Fotos auf die übrigen gewählten übertragen (ohne Zuschnitt und Drehung)"
+                onClick={synchronisieren}
+              >
+                Synchronisieren ({andere.length})
+              </Knopf>
+            ) : (
+              <Knopf
+                art="rahmen"
+                className="h-7 flex-1 px-2 text-[12px]"
+                disabled={!vorherige || vorherige.id === id}
+                title="Einstellungen des zuvor bearbeiteten Fotos übernehmen (ohne Zuschnitt)"
+                onClick={() => vorherige && anwenden(vorherige.e)}
+              >
+                Vorherige
+              </Knopf>
+            )}
             <Knopf
               art="rahmen"
               className="h-7 flex-1 px-2 text-[12px]"

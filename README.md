@@ -83,11 +83,20 @@ Tests: `go test ./...` in `backend/`, `npx tsc --noEmit` in `frontend/`.
 | G / E | Raster / Lupe | I | Info im Bild ein/aus |
 | Tab | Seitenleisten ein/aus | Tab | Seitenleisten ein/aus |
 | F6 | Filmstreifen ein/aus | F6 | Filmstreifen ein/aus |
+| Doppelklick | Entwickeln | Strg/Umschalt+Klick im Filmstreifen | Fotos dazuwählen |
+| Rechtsklick | Menü für die Auswahl | Rechtsklick | Menü für die Auswahl |
 
 Die Oberfläche folgt dem Aufbau klassischer Fotoverwaltungen: links Navigator,
 Katalog und Sammlungen nach Datum und Kamera bzw. Vorgaben und Protokoll,
 rechts Histogramm, Metadaten und die Regler, unten Werkzeugleiste und
-Filmstreifen.
+Filmstreifen mit allen Fotos.
+
+Mehrere Fotos auf einmal: Strg- oder Umschalt-Klick wählt aus, dann wirken
+Rechtsklick (Bewertung, Markierung, Farbe, Automatisch, Einstellungen
+einfügen, Vorgabe, Zurücksetzen, Löschen) und die Schnellentwicklung der
+Bibliothek auf alle. In Entwickeln überträgt „Synchronisieren“ die
+Einstellungen des offenen Fotos auf die übrigen gewählten. Die Vorschaubilder
+dieser Fotos rechnet der Browser dabei im Hintergrund neu.
 
 ## Lizenz
 

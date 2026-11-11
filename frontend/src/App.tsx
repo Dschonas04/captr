@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from "react";
 import { api, sso, type SSOStatus, type Status } from "./api";
 import { SSODialog } from "./sso";
+import { Kontextmenue } from "./lr";
 import { Settings } from "lucide-react";
 import Bibliothek from "./bibliothek/Bibliothek";
 import Entwickeln from "./entwickeln/Entwickeln";
@@ -145,6 +146,7 @@ export default function App() {
       </main>
       <Meldungen />
       <Rueckfragen />
+      <Kontextmenue />
     </div>
   );
 }

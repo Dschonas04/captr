@@ -1,7 +1,7 @@
 // Bausteine im Stil einer klassischen Fotoverwaltung: Seitenleisten mit
 // Klapp-Panels, Navigator, Filmstreifen, Histogramm aus einem Vorschaubild.
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { create } from "zustand";
 import { formatiereBelichtung, miniUrl, vorschauUrl, type Bild } from "./api";
 import type { Histogramm } from "./entwickeln/gpu";
@@ -264,6 +264,7 @@ export function Filmstreifen({
   quelle,
   onKlick,
   onDoppel,
+  onKontext,
 }: {
   bilder: Bild[];
   aktiv?: string;
@@ -271,6 +272,7 @@ export function Filmstreifen({
   quelle: string;
   onKlick: (b: Bild, e: React.MouseEvent) => void;
   onDoppel?: (b: Bild) => void;
+  onKontext?: (b: Bild, e: React.MouseEvent) => void;
 }) {
   const offen = useLeisten((s) => s.film);
   const umschalten = useLeisten((s) => s.umschalten);
@@ -314,9 +316,10 @@ export function Filmstreifen({
                 }}
                 onClick={(e) => onKlick(b, e)}
                 onDoubleClick={() => onDoppel?.(b)}
+                onContextMenu={(e) => onKontext?.(b, e)}
                 className={cx(
                   "relative flex h-[74px] w-[98px] shrink-0 items-center justify-center rounded-[2px] transition-colors",
-                  an ? "bg-[#4a4a4a]" : gew ? "bg-[#3a3a3a]" : "bg-[#262626] hover:bg-[#2e2e2e]",
+                  an ? "bg-[#505050] ring-1 ring-white/25" : gew ? "bg-[#3c3c3c]" : "bg-[#262626] hover:bg-[#2e2e2e]",
                 )}
                 title={b.name}
               >
@@ -339,4 +342,113 @@ export function Filmstreifen({
       )}
     </div>
   );
+}
+
+// ---------- Kontextmenü ----------
+
+export interface MenuePunkt {
+  text?: string;
+  tasten?: string;
+  aus?: boolean;
+  an?: boolean;
+  gefahr?: boolean;
+  trenner?: boolean;
+  kopf?: boolean;
+  onKlick?: () => void;
+  unter?: MenuePunkt[];
+}
+
+export const useMenue = create<{ offen: { x: number; y: number; punkte: MenuePunkt[] } | null; zeige: (e: React.MouseEvent, punkte: MenuePunkt[]) => void; zu: () => void }>(
+  (set) => ({
+    offen: null,
+    zeige: (e, punkte) => {
+      e.preventDefault();
+      e.stopPropagation();
+      set({ offen: { x: e.clientX, y: e.clientY, punkte } });
+    },
+    zu: () => set({ offen: null }),
+  }),
+);
+
+function MenueListe({ punkte, x, y, onZu }: { punkte: MenuePunkt[]; x: number; y: number; onZu: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ x, y });
+  const [unter, setUnter] = useState<{ i: number; x: number; y: number } | null>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setPos({ x: Math.max(4, Math.min(x, innerWidth - r.width - 4)), y: Math.max(4, Math.min(y, innerHeight - r.height - 4)) });
+  }, [x, y]);
+  return (
+    <div
+      ref={ref}
+      role="menu"
+      className="fixed z-[100003] min-w-[210px] rounded-[5px] border border-white/10 bg-[#262626] py-1 text-[12.5px] shadow-[0_10px_30px_rgba(0,0,0,0.6)]"
+      style={{ left: pos.x, top: pos.y }}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      {punkte.map((p, i) =>
+        p.trenner ? (
+          <div key={i} className="my-1 h-px bg-white/[0.07]" />
+        ) : p.kopf ? (
+          <div key={i} className="px-3 pb-1 pt-0.5 text-[11px] text-text-3">
+            {p.text}
+          </div>
+        ) : (
+          <button
+            key={i}
+            role="menuitem"
+            disabled={p.aus}
+            className={cx(
+              "flex w-full items-center gap-2 px-3 py-[5px] text-left disabled:opacity-35",
+              p.gefahr ? "text-gefahr hover:bg-gefahr/15" : "text-text hover:bg-licht/20",
+              unter?.i === i && "bg-licht/20",
+            )}
+            onMouseEnter={(e) => {
+              if (p.unter) {
+                const r = e.currentTarget.getBoundingClientRect();
+                setUnter({ i, x: r.right - 2, y: r.top - 4 });
+              } else setUnter(null);
+            }}
+            onClick={() => {
+              if (p.unter) return;
+              onZu();
+              p.onKlick?.();
+            }}
+          >
+            <span className="w-3 text-[11px] text-licht">{p.an ? "✓" : ""}</span>
+            <span className="flex-1">{p.text}</span>
+            {p.tasten && <span className="text-[11px] text-text-3">{p.tasten}</span>}
+            {p.unter && <Dreieck richtung="rechts" className="text-text-3" />}
+          </button>
+        ),
+      )}
+      {unter && punkte[unter.i]?.unter && <MenueListe punkte={punkte[unter.i].unter!} x={unter.x} y={unter.y} onZu={onZu} />}
+    </div>
+  );
+}
+
+export function Kontextmenue() {
+  const { offen, zu } = useMenue();
+  useEffect(() => {
+    if (!offen) return;
+    const weg = (e: Event) => {
+      if (e instanceof KeyboardEvent && e.key !== "Escape") return;
+      if (e instanceof MouseEvent && (e.target as HTMLElement).closest("[role=menu]")) return;
+      zu();
+    };
+    window.addEventListener("mousedown", weg, true);
+    window.addEventListener("keydown", weg, true);
+    window.addEventListener("blur", zu);
+    window.addEventListener("resize", zu);
+    return () => {
+      window.removeEventListener("mousedown", weg, true);
+      window.removeEventListener("keydown", weg, true);
+      window.removeEventListener("blur", zu);
+      window.removeEventListener("resize", zu);
+    };
+  }, [offen, zu]);
+  if (!offen) return null;
+  return <MenueListe key={`${offen.x},${offen.y}`} punkte={offen.punkte} x={offen.x} y={offen.y} onZu={zu} />;
 }

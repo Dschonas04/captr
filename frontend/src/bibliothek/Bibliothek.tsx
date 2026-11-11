@@ -12,9 +12,12 @@ import {
   type Hochladefortschritt,
 } from "../api";
 import { FARBEN, Knopf, Laedt, Sterne, SymbolKnopf, cx, eingabe, farbeCss, frage, melde } from "../ui";
-import { abweichungen, vervollstaendige } from "../entwickeln/einstellungen";
+import { abweichungen, standard, vervollstaendige, type Einstellungen } from "../entwickeln/einstellungen";
 import { Dreieck, Filmstreifen, HistogrammPanel, Navigator, Panel, Seitenleiste, exifTeile, useBildHistogramm, useLeistenTasten } from "../lr";
 import { datumVon, letzterImport, sichtbar, tag, useBibliothek } from "./speicher";
+import { fotoMenue, ladeVorgaben } from "./menue";
+import { useMenue } from "../lr";
+import { EINGEBAUT, ablage, aufAlle, kopiere, mitAutomatik, mitVorgabe } from "../entwickeln/stapel";
 
 export const ANNEHMBAR =
   ".jpg,.jpeg,.png,.tif,.tiff,.webp,.heic,.heif,.avif,.gif,.bmp,.cr2,.cr3,.crw,.nef,.nrw,.arw,.srf,.sr2,.dng,.raf,.orf,.rw2,.pef,.srw,.x3f,.3fr,.iiq,.mos,.erf,.kdc,.mrw,.rwl";
@@ -95,6 +98,7 @@ function Zelle({
   groesse,
   onKlick,
   onDoppel,
+  onKontext,
 }: {
   b: Bild;
   nummer: number;
@@ -103,6 +107,7 @@ function Zelle({
   groesse: number;
   onKlick: (e: React.MouseEvent) => void;
   onDoppel: () => void;
+  onKontext: (e: React.MouseEvent) => void;
 }) {
   const farbe = farbeCss(b.farbe);
   const hoehe = Math.round(groesse * 1.08);
@@ -113,6 +118,7 @@ function Zelle({
       data-id={b.id}
       onClick={onKlick}
       onDoubleClick={onDoppel}
+      onContextMenu={onKontext}
       className={cx(
         "group relative flex cursor-default select-none flex-col overflow-hidden rounded-[3px] transition-colors",
         haupt ? "bg-[#4b4b4b]" : gewaehlt ? "bg-[#3c3c3c]" : "bg-[#2a2a2a] hover:bg-[#323232]",
@@ -427,6 +433,79 @@ function Metadaten({ b, alle }: { b: Bild; alle: string[] }) {
   );
 }
 
+// Schnellentwicklung: Schritte auf alle gewählten Fotos, ohne Entwickeln zu öffnen
+function Schnellentwicklung({ ids }: { ids: string[] }) {
+  const [vorgaben, setVorgaben] = useState<{ name: string; e: Partial<Einstellungen> }[]>(EINGEBAUT);
+  useEffect(() => {
+    void ladeVorgaben().then((v) => setVorgaben([...v.map((x) => ({ name: x.name, e: x.einstellungen })), ...EINGEBAUT]));
+  }, []);
+  const schritt = (k: "belichtung" | "kontrast" | "lichter" | "tiefen" | "klarheit" | "dynamik", d: number, was: string) =>
+    void aufAlle(ids, (alt) => ({ ...alt, [k]: Math.max(k === "belichtung" ? -5 : -100, Math.min(k === "belichtung" ? 5 : 100, Math.round(((alt[k] as number) + d) * 100) / 100)) }), was);
+  const zeile = (name: string, k: Parameters<typeof schritt>[0], gross: number, klein: number, einheit = "") => (
+    <div className="grid grid-cols-[78px_repeat(4,1fr)] items-center gap-1 py-[2px] text-[12px]">
+      <span className="truncate text-right text-text-3">{name}</span>
+      {[-gross, -klein, klein, gross].map((d, i) => (
+        <button
+          key={i}
+          className="h-6 rounded-[3px] bg-[#2b2b2b] text-[11px] text-text-2 hover:bg-[#363636] hover:text-text"
+          onClick={() => schritt(k, d, `${name} ${d > 0 ? "+" : "−"}${String(Math.abs(d)).replace(".", ",")}${einheit}`)}
+          title={`${name} ${d > 0 ? "+" : ""}${d}${einheit}`}
+        >
+          {i < 2 ? (i === 0 ? "◀◀" : "◀") : i === 2 ? "▶" : "▶▶"}
+        </button>
+      ))}
+    </div>
+  );
+  return (
+    <Panel titel="Schnellentwicklung" offen={false}>
+      {ids.length > 1 && <p className="mb-2 text-[11.5px] text-licht">Wirkt auf {ids.length} Fotos</p>}
+      <div className="grid grid-cols-[78px_1fr] items-center gap-1 pb-1.5 text-[12px]">
+        <span className="text-right text-text-3">Vorgabe</span>
+        <select
+          className="h-7 rounded-[3px] border border-linie bg-[#262626] px-1.5 text-[12px] text-text-2 outline-none"
+          value=""
+          onChange={(e) => {
+            const v = vorgaben[Number(e.target.value)];
+            if (v) void aufAlle(ids, (alt) => mitVorgabe(alt, v.e), v.name);
+          }}
+        >
+          <option value="">Anwenden …</option>
+          {vorgaben.map((v, i) => (
+            <option key={i} value={i}>
+              {v.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      {zeile("Belichtung", "belichtung", 1, 0.33)}
+      {zeile("Kontrast", "kontrast", 20, 5)}
+      {zeile("Lichter", "lichter", 20, 5)}
+      {zeile("Tiefen", "tiefen", 20, 5)}
+      {zeile("Klarheit", "klarheit", 20, 5)}
+      {zeile("Dynamik", "dynamik", 20, 5)}
+      <div className="mt-2 flex gap-1.5">
+        <Knopf art="rahmen" className="h-7 flex-1 px-2 text-[12px]" onClick={() => void aufAlle(ids, (alt, en) => mitAutomatik(alt, en), "Automatisch")}>
+          Automatisch
+        </Knopf>
+        <Knopf
+          art="rahmen"
+          className="h-7 flex-1 px-2 text-[12px]"
+          onClick={() =>
+            frage({
+              title: ids.length > 1 ? `${ids.length} Fotos zurücksetzen?` : "Foto zurücksetzen?",
+              message: "Alle Einstellungen gehen auf den Ausgangszustand zurück, auch Zuschnitt und Drehung.",
+              primaryActionText: "Zurücksetzen",
+              onPrimaryAction: () => void aufAlle(ids, () => standard(), "Zurückgesetzt"),
+            })
+          }
+        >
+          Zurücksetzen
+        </Knopf>
+      </div>
+    </Panel>
+  );
+}
+
 function Bearbeitungen({ b }: { b: Bild }) {
   const liste = useMemo(() => abweichungen(vervollstaendige(b.einstellungen)), [b.einstellungen]);
   return (
@@ -530,7 +609,8 @@ function Werkzeugleiste({
 // ---------- Modul ----------
 
 export default function Bibliothek() {
-  const { bilder: alleBilder, geladen, auswahl, waehle, aendere, laden, entferne, sammlung } = useBibliothek();
+  const { bilder: alleBilder, alle: katalog, geladen, auswahl, waehle, aendere, laden, entferne, sammlung } = useBibliothek();
+  const zeigeMenue = useMenue((s) => s.zeige);
   const bilder = useMemo(() => sichtbar(alleBilder, sammlung), [alleBilder, sammlung]);
   const { fortschritt, lade, waehle: dateienWaehlen } = useHochladen();
   const [ziehen, setZiehen] = useState(false);
@@ -602,6 +682,18 @@ export default function Bibliothek() {
         useBibliothek.setState({ auswahl: bilder.map((b) => b.id) });
         return;
       }
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "c" && aktiv) {
+        e.preventDefault();
+        kopiere(vervollstaendige(aktiv.einstellungen), aktiv.name);
+        melde(`Einstellungen von ${aktiv.name} kopiert`);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "v" && ids.length && ablage.e) {
+        e.preventDefault();
+        const teil = ablage.e;
+        void aufAlle(ids, (alt) => mitVorgabe(alt, teil), "Eingefügt");
+        return;
+      }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (/^[0-5]$/.test(e.key) && ids.length) return void aendere(ids, { bewertung: Number(e.key) });
       const farbTaste: Record<string, string> = { "6": "rot", "7": "gelb", "8": "gruen", "9": "blau" };
@@ -642,7 +734,18 @@ export default function Bibliothek() {
     void lade(Array.from(e.dataTransfer.files));
   };
 
-  const klick = (b: Bild, e: React.MouseEvent) => waehle(b.id, e.shiftKey ? "bereich" : e.ctrlKey || e.metaKey ? "dazu" : "einzeln");
+  const klick = (b: Bild, e: React.MouseEvent, liste = bilder) => waehle(b.id, e.shiftKey ? "bereich" : e.ctrlKey || e.metaKey ? "dazu" : "einzeln", liste);
+  // Rechtsklick: gehoert das Foto nicht zur Auswahl, wird es allein gewaehlt
+  const kontext = (b: Bild, e: React.MouseEvent) => {
+    let ids = useBibliothek.getState().auswahl;
+    if (!ids.includes(b.id)) {
+      ids = [b.id];
+      useBibliothek.setState({ auswahl: ids });
+    } else ids = [b.id, ...ids.filter((x) => x !== b.id)];
+    useBibliothek.setState({ auswahl: ids });
+    zeigeMenue(e, fotoMenue(ids, b, { lupe: () => setAnsicht("lupe") }));
+  };
+  const entwickeln = (b: Bild) => (location.hash = `#/entwickeln/${b.id}`);
   const gefiltert = Object.values(useBibliothek.getState().filter).some((v) => v && v !== "aufgenommen") || sammlung !== "alle";
 
   return (
@@ -687,7 +790,7 @@ export default function Bibliothek() {
             ) : bilder.length === 0 ? (
               <Leer onImport={dateienWaehlen} gefiltert={gefiltert} />
             ) : ansicht === "lupe" && aktiv ? (
-              <div className="h-full" onDoubleClick={() => setAnsicht("raster")}>
+              <div className="h-full" onDoubleClick={() => entwickeln(aktiv)} onContextMenu={(e) => kontext(aktiv, e)}>
                 <Lupe b={aktiv} />
               </div>
             ) : (
@@ -704,10 +807,8 @@ export default function Bibliothek() {
                     gewaehlt={auswahl.includes(b.id)}
                     haupt={auswahl[0] === b.id}
                     onKlick={(e) => klick(b, e)}
-                    onDoppel={() => {
-                      waehle(b.id);
-                      setAnsicht("lupe");
-                    }}
+                    onDoppel={() => entwickeln(b)}
+                    onKontext={(e) => kontext(b, e)}
                   />
                 ))}
               </div>
@@ -742,6 +843,7 @@ export default function Bibliothek() {
           <HistogrammPanel h={histo} bild={aktiv} />
           {aktiv ? (
             <>
+              <Schnellentwicklung ids={alle} />
               <Metadaten b={aktiv} alle={alle} />
               <Bearbeitungen b={aktiv} />
             </>
@@ -752,12 +854,13 @@ export default function Bibliothek() {
       </div>
 
       <Filmstreifen
-        bilder={bilder}
+        bilder={katalog}
         aktiv={auswahl[0]}
         auswahl={auswahl}
-        quelle={sammlungName(sammlung)}
-        onKlick={klick}
-        onDoppel={(b) => (location.hash = `#/entwickeln/${b.id}`)}
+        quelle="Alle Fotos"
+        onKlick={(b, e) => klick(b, e, katalog)}
+        onDoppel={entwickeln}
+        onKontext={kontext}
       />
 
       {ziehen && (
