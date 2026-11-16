@@ -7,7 +7,7 @@ COPY frontend/ ./
 RUN npx tsc --noEmit -p . && npx vite build
 
 # Dienst bauen, Oberflaeche eingebettet
-FROM golang:1.27-alpine AS dienst
+FROM golang:1.27.4-alpine AS dienst
 WORKDIR /bau/backend
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download
