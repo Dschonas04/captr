@@ -101,6 +101,14 @@ Bibliothek auf alle. In Entwickeln überträgt „Synchronisieren“ die
 Einstellungen des offenen Fotos auf die übrigen gewählten. Die Vorschaubilder
 dieser Fotos rechnet der Browser dabei im Hintergrund neu.
 
+## Fertige Images
+
+Zu jedem Release liegen Images für amd64 und arm64 auf GitHub Packages:
+
+- `ghcr.io/dschonas04/captr`
+
+Tags: `latest`, die Version (`1.2.3`) sowie `1.2` und `1`. In `docker-compose.yml` genügt `image: ghcr.io/dschonas04/captr:1` statt `build: .`.
+
 ## Lizenz
 
 Apache 2.0, siehe [LICENSE](LICENSE). Die Leinwand-Dateien aus ArtCraft und

@@ -1,7 +1,7 @@
 {
   "name": "captr",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "author": "Jonas Groll <200050623+Dschonas04@users.noreply.github.com>",
   "license": "Apache-2.0",
   "type": "module",
