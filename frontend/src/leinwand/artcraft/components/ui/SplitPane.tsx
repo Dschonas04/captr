@@ -68,7 +68,7 @@ export default function SplitPane({
     window.addEventListener("mouseup", endDrag, { once: true });
     window.addEventListener("touchend", endDrag, { once: true });
   }, [minPercent, maxPercent, onChange]);
-  /* Tailwind handles almost all the styling—only flex-basis is inline */
+  /* Tailwind handles almost all the styling, only flex-basis is inline */
   const leftStyle: CSSProperties = { flexBasis: `${leftPct}%` };
 
   return singlePaneMode ? (

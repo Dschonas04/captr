@@ -828,7 +828,7 @@ export default function Entwickeln({ id }: { id: string }) {
               title="Einstellungen kopieren (Strg+Umschalt+C)"
               onClick={() => {
                 kopiere(e, bild?.name ?? "");
-                melde("Einstellungen kopiert – mit „Einfügen“ oder Strg+Umschalt+V übertragen");
+                melde("Einstellungen kopiert: mit „Einfügen“ oder Strg+Umschalt+V übertragen");
               }}
             >
               <Copy size={13} /> Kopieren …
@@ -1183,11 +1183,11 @@ export default function Entwickeln({ id }: { id: string }) {
             onEnde={ende}
           />
           <p className="mt-2 text-[11px] text-text-3">
-            Ergebnis: {tex[0] && bild ? ausgabeGroesse(bild.breite, bild.hoehe, e).join(" × ") : "–"} px
+            Ergebnis: {tex[0] && bild ? ausgabeGroesse(bild.breite, bild.hoehe, e).join(" × ") : "-"} px
           </p>
         </Abschnitt>
         <div className="p-4 text-[11px] leading-relaxed text-text-3">
-          Tasten: \ Vorher · R Zuschneiden · Z Lupe · I Info · Tab Leisten · F6 Filmstreifen · ←/→ Foto · 0–5 Sterne · P/X Markieren · G Bibliothek
+          Tasten: \ Vorher · R Zuschneiden · Z Lupe · I Info · Tab Leisten · F6 Filmstreifen · ←/→ Foto · 0-5 Sterne · P/X Markieren · G Bibliothek
         </div>
       </Seitenleiste>
 

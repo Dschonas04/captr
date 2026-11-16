@@ -73,7 +73,7 @@ const SideToolbar: React.FC<SideToolbarProps> = ({
   const { forAction } = useResolvedKeybinds();
   const [open, setOpen] = useState<string | null>(null);
   // Canonical brush/eraser size lives in the store (PaintSurface draws with
-  // it, the Ctrl+± keybinds adjust it) — the slider reads/writes it directly
+  // it, the Ctrl+± keybinds adjust it), the slider reads/writes it directly
   // so keyboard changes show up here too.
   const brushSize = store.brushSize;
   const setBrushSize = store.setBrushSize;
@@ -217,7 +217,7 @@ const SideToolbar: React.FC<SideToolbarProps> = ({
   const BgPopout = makePicker(bgHsva, setBgHsva, sendBg);
   const ShapePopout = makePicker(shapeHsva, setShapeHsva, sendShapeColor);
 
-  // Size-only popout — the eraser has no color, just its own size, kept
+  // Size-only popout: the eraser has no color, just its own size, kept
   // separate from the brush so switching tools doesn't clobber either.
   const EraserPopout = (
     <div className="glass relative w-56 rounded-2xl p-4 shadow-lg">
@@ -461,7 +461,7 @@ const SideToolbar: React.FC<SideToolbarProps> = ({
           id === "inpaint" && !supportsMaskTool
             ? label + " (nicht verfügbar)"
             : id === "add-shape" && toolBinding
-              ? `${label} — ${formatBinding(toolBinding)} wechselt die Form`
+              ? `${label}: ${formatBinding(toolBinding)} wechselt die Form`
               : label;
 
         return (

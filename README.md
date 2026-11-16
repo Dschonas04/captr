@@ -2,27 +2,27 @@
 
 <img src="docs/logo.svg" alt="" width="96" align="right">
 
-Fotos sammeln, entwickeln und zusammensetzen – im Browser, auf dem eigenen
+Fotos sammeln, entwickeln und zusammensetzen, im Browser, auf dem eigenen
 Server. Ähnlich wie Lightroom, nur ohne Abo und ohne Cloud.
 
-- **Bibliothek** – RAW (CR2, CR3, NEF, ARW, DNG, RAF, ORF, RW2 und viele mehr),
+- **Bibliothek**: RAW (CR2, CR3, NEF, ARW, DNG, RAF, ORF, RW2 und viele mehr),
   JPEG, PNG, TIFF, WebP und HEIC hineinziehen. Sterne, Markierungen,
   Farbetiketten, Filter, Aufnahmedaten.
-- **Entwickeln** – zerstörungsfrei: Weißabgleich, Belichtung, Kontrast,
+- **Entwickeln**: zerstörungsfrei: Weißabgleich, Belichtung, Kontrast,
   Lichter, Tiefen, Weiß, Schwarz, Klarheit, Dunst, Dynamik, Sättigung,
   Gradationskurven (RGB und je Kanal), Farbton/Sättigung/Luminanz für acht
   Farbbereiche, Schärfen, Vignette, Körnung, Zuschneiden mit
   Seitenverhältnis, Drehen, Spiegeln. Histogramm, Vorher/Nachher, 1:1-Lupe,
   Rückgängig, Vorlagen, Einstellungen übertragen, Export als JPEG, PNG oder
   WebP in voller Auflösung.
-- **Leinwand** – Fotos zu Collagen zusammensetzen, Hintergrund per Klick
+- **Leinwand**: Fotos zu Collagen zusammensetzen, Hintergrund per Klick
   entfernen, Formen und Pinselstriche darüberlegen, als PNG oder JPEG
   exportieren. Die Leinwand stammt aus [ArtCraft](https://github.com/storytold/artcraft).
 
 ## Wie es funktioniert
 
 Der Dienst (Go) nimmt die Dateien an, liest die Aufnahmedaten mit ExifTool,
-entwickelt RAWs mit LibRaw und liefert die Bildpunkte an den Browser – erst
+entwickelt RAWs mit LibRaw und liefert die Bildpunkte an den Browser, erst
 eine kleine Fassung (1024 px) zum sofortigen Arbeiten, dann die scharfe
 (2560 px), für die Lupe die volle Auflösung. Beide Arbeitsgrößen entstehen
 schon beim Import; übertragen wird mit 12 Bit je Kanal, mehr kommt in der
@@ -30,7 +30,7 @@ Halbfloat-Textur ohnehin nicht an. Dort läuft die ganze Entwicklung als WebGL2-
 Grafikkarte: jeder Regler ist nur ein Parameter, das Bild reagiert ohne
 Verzögerung. Gespeichert werden nur die Einstellungen; das Original bleibt
 unberührt. Das Freistellen übernimmt [rembg](https://github.com/danielgatis/rembg)
-im Nachbarcontainer – nichts verlässt das eigene Netz.
+im Nachbarcontainer: nichts verlässt das eigene Netz.
 
 ```
 frontend/   React, TypeScript, Vite, Tailwind; Leinwand mit Konva
@@ -52,7 +52,7 @@ Captr läuft dann auf Port 8320. Die Daten liegen im Volume `captr-daten`.
 | `CAPTR_REMBG_MODELL` | rembg-Modell | `isnet-general-use` |
 | `CAPTR_DATEN` | Datenordner | `/daten` |
 
-Der Browser braucht WebGL2 mit `EXT_color_buffer_float` – das können alle
+Der Browser braucht WebGL2 mit `EXT_color_buffer_float` - das können alle
 aktuellen Desktop-Browser.
 
 ## Anmeldung per SSO
@@ -77,9 +77,9 @@ Tests: `go test ./...` in `backend/`, `npx tsc --noEmit` in `frontend/`.
 
 | Bibliothek | | Entwickeln | |
 |---|---|---|---|
-| 0–5 | Sterne | \ | Vorher/Nachher |
+| 0-5 | Sterne | \ | Vorher/Nachher |
 | P / X / U | auswählen / ablehnen / aufheben | R | Zuschneiden |
-| 6–9 | Farbetikett | Z, Leertaste | 1:1-Lupe |
+| 6-9 | Farbetikett | Z, Leertaste | 1:1-Lupe |
 | Enter, D | Entwickeln | ← / → | voriges / nächstes Foto |
 | Entf | Löschen | Strg+Z | Rückgängig |
 | Strg+A | alle wählen | Strg+Umschalt+C / V | Einstellungen kopieren / einfügen |

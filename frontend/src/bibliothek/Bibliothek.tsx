@@ -382,7 +382,7 @@ function Metadaten({ b, alle }: { b: Bild; alle: string[] }) {
   const aendere = useBibliothek((s) => s.aendere);
   return (
     <Panel titel="Metadaten">
-      {alle.length > 1 && <p className="mb-2 text-[11.5px] text-licht">{alle.length} Fotos gewählt – Bewertung, Markierung und Farbe gelten für alle</p>}
+      {alle.length > 1 && <p className="mb-2 text-[11.5px] text-licht">{alle.length} Fotos gewählt: Bewertung, Markierung und Farbe gelten für alle</p>}
       <Zeile name="Dateiname">
         <span title={b.name}>{b.name}</span>
       </Zeile>
@@ -414,7 +414,7 @@ function Metadaten({ b, alle }: { b: Bild; alle: string[] }) {
         </span>
       </Zeile>
       <div className="my-2 h-px bg-linie" />
-      <Zeile name="Aufgenommen">{formatiereDatum(b.aufgenommen) || "–"}</Zeile>
+      <Zeile name="Aufgenommen">{formatiereDatum(b.aufgenommen) || "-"}</Zeile>
       <Zeile name="Abmessungen">
         <span className="zahl">
           {b.breite} × {b.hoehe}
@@ -422,12 +422,12 @@ function Metadaten({ b, alle }: { b: Bild; alle: string[] }) {
       </Zeile>
       <Zeile name="Dateigröße">{formatiereBytes(b.bytes)}</Zeile>
       <Zeile name="Format">{b.art.toUpperCase()}</Zeile>
-      <Zeile name="Kamera">{b.kamera || "–"}</Zeile>
-      <Zeile name="Objektiv">{b.objektiv || "–"}</Zeile>
-      <Zeile name="Brennweite">{b.brennweite ? `${Math.round(b.brennweite)} mm` : "–"}</Zeile>
-      <Zeile name="Blende">{b.blende ? `f/${String(b.blende).replace(".", ",")}` : "–"}</Zeile>
-      <Zeile name="Belichtung">{formatiereBelichtung(b.belichtungszeit) || "–"}</Zeile>
-      <Zeile name="ISO">{b.iso || "–"}</Zeile>
+      <Zeile name="Kamera">{b.kamera || "-"}</Zeile>
+      <Zeile name="Objektiv">{b.objektiv || "-"}</Zeile>
+      <Zeile name="Brennweite">{b.brennweite ? `${Math.round(b.brennweite)} mm` : "-"}</Zeile>
+      <Zeile name="Blende">{b.blende ? `f/${String(b.blende).replace(".", ",")}` : "-"}</Zeile>
+      <Zeile name="Belichtung">{formatiereBelichtung(b.belichtungszeit) || "-"}</Zeile>
+      <Zeile name="ISO">{b.iso || "-"}</Zeile>
       <Zeile name="Importiert">{formatiereDatum(b.angelegt)}</Zeile>
     </Panel>
   );

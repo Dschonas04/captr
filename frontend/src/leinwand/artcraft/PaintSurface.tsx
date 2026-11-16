@@ -87,7 +87,7 @@ export const PaintSurface = ({
 
   /*
    * Subscribe only to the slice PaintSurface needs. We do NOT subscribe to nodes/lineNodes
-   * here — they come as props from PageDraw. That way during drawing we don't re-render
+   * here: they come as props from PageDraw. That way during drawing we don't re-render
    * on every point; we only flush the current stroke to the store on mouse up.
    */
   const selector = useMemo(
@@ -131,7 +131,7 @@ export const PaintSurface = ({
   const imageRef = React.useRef<Konva.Image>(null);
   const leftPanelRef = React.useRef<Konva.Layer>(null);
   // Tracks which draw-node ids we've already shown, so only freshly added
-  // images/shapes get the entrance fade — not the whole canvas on scene restore.
+  // images/shapes get the entrance fade, not the whole canvas on scene restore.
   const seenNodeIdsRef = React.useRef<Set<string> | null>(null);
   const rightContainerRef = React.useRef<HTMLDivElement>(null);
   const cursorLayerRef = React.useRef<Konva.Layer>(null);
@@ -1465,7 +1465,7 @@ export const PaintSurface = ({
   // Entrance fade for newly added images/shapes. Opacity is the only safe
   // channel here: x/y/scale are controlled props that react-konva would reset
   // on the next render, but opacity is left untouched, so an imperative tween
-  // survives re-renders. Strokes ("line") are skipped — a drawn line shouldn't
+  // survives re-renders. Strokes ("line") are skipped: a drawn line shouldn't
   // fade in. The first pass just records existing ids so a restored scene
   // doesn't replay the entrance for every object at once.
   useLayoutEffect(() => {
@@ -1669,7 +1669,7 @@ export const PaintSurface = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNodeIds]);
 
-  // drawNodes is already ordered — render directly, no splitting needed.
+  // drawNodes is already ordered: render directly, no splitting needed.
   // inpaintLineNodes is the separate inpaint layer.
 
   return (

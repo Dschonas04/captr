@@ -12,7 +12,7 @@ import { Model3DParams } from "../utilities/render3DModel";
 // even drawNodes) with A's content.
 let baseImageLoadGen = 0;
 
-// LineNode type — ordering in PageDraw is by position in drawNodes array (zIndex ignored there)
+// LineNode type: ordering in PageDraw is by position in drawNodes array (zIndex ignored there)
 export type LineNode = {
   id: string;
   type: "line";
@@ -111,7 +111,7 @@ export interface SceneState {
    */
   drawNodes: (Node | LineNode)[];
   /**
-   * Inpaint mask strokes — rendered in their own Konva layer, not z-ordered
+   * Inpaint mask strokes: rendered in their own Konva layer, not z-ordered
    * against drawNodes.
    */
   inpaintLineNodes: LineNode[];
@@ -125,7 +125,7 @@ export interface SceneState {
   activeTool: ActiveTool;
   brushColor: string;
   brushSize: number;
-  // Eraser keeps its own size (like inpaintBrushSize) — erasing strokes are
+  // Eraser keeps its own size (like inpaintBrushSize): erasing strokes are
   // typically much bigger than brush strokes, so the sizes don't shadow each
   // other across tool switches.
   eraserSize: number;
@@ -285,7 +285,7 @@ export interface SceneState {
   bringForward: (nodeIds: string[]) => void;
   sendBackward: (nodeIds: string[]) => void;
 
-  // Start background removal — returns {base64, nodeId} for the caller to enqueue via adapter
+  // Start background removal: returns {base64, nodeId} for the caller to enqueue via adapter
   beginRemoveBackground: (nodeIds: string[]) => Promise<{ base64: string; nodeId: string } | null>;
 
   // Finish background removal (handoff back from the platform event)
@@ -570,7 +570,7 @@ export const useSceneStore = create<SceneState>((set, get, store) => ({
               model3dParams: n.model3dParams,
             } as SerializedNodeData;
           }
-          // LineNode — plain object, deep copy
+          // LineNode: plain object, deep copy
           return JSON.parse(JSON.stringify(n)) as LineNode;
         }),
         inpaintLineNodes: JSON.parse(JSON.stringify(state.inpaintLineNodes)),
@@ -608,7 +608,7 @@ export const useSceneStore = create<SceneState>((set, get, store) => ({
 
     const restoredDrawNodes = await Promise.all(
       previousState.drawNodes.map(async (nodeData) => {
-        // LineNode — plain object, no image loading needed
+        // LineNode: plain object, no image loading needed
         if (nodeData.type === "line") {
           return nodeData as LineNode;
         }
@@ -687,7 +687,7 @@ export const useSceneStore = create<SceneState>((set, get, store) => ({
     });
   },
 
-  // Line node actions — route by id prefix
+  // Line node actions: route by id prefix
   addLineNode: (lineNode: LineNode, shouldSaveState: boolean = true) => {
     if (lineNode.id.startsWith("line-inpaint")) {
       set((state) => ({
@@ -1232,7 +1232,7 @@ export const useSceneStore = create<SceneState>((set, get, store) => ({
   // No-op: ordering is now managed by position in drawNodes array
   normalizeZIndices: () => {},
 
-  // Layer management — all O(n) operations on drawNodes array
+  // Layer management: all O(n) operations on drawNodes array
 
   bringToFront: (nodeIds: string[]) => {
     set((state) => {
