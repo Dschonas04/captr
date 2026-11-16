@@ -104,6 +104,16 @@ export function SSODialog({ status, onSchliessen }: { status: SSOStatus | null; 
               {meldung.text}
             </p>
           )}
+          <div className="mt-2 border-t border-linie pt-3">
+            <p className="text-[13px] font-medium">Konten mit Passwort</p>
+            <p className="text-[12px] text-text-2">
+              Anmelden mit Benutzername und Passwort, auf derselben Anmeldeseite wie SSO.{" "}
+              {status?.konten ? "Konten sind eingerichtet." : "Noch kein Konto; das erste schaltet die Anmeldung ein."}{" "}
+              <a className="underline" href="/sso/konten">
+                Konten verwalten
+              </a>
+            </p>
+          </div>
           {status?.nutzer && (
             <p className="text-[12px] text-text-2">
               Angemeldet als {status.nutzer.name || status.nutzer.nutzer} ·{" "}

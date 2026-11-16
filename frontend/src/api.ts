@@ -262,6 +262,7 @@ export interface SSOStand {
 export interface SSOStatus {
   aktiv: boolean;
   angemeldet: boolean;
+  konten?: boolean;
   nutzer?: { name: string; nutzer: string; email: string };
 }
 export const sso = {
