@@ -378,6 +378,9 @@ func schreibeJPEG(pfad string, p *Pixel, qualitaet int) error {
 // zum linken Nachbarn da (modulo 2^16), und alle hohen Bytes kommen vor allen
 // niedrigen. Das macht die Uebertragung gut ein Drittel kleiner.
 func schreibeCPX(pfad string, p *Pixel) error {
+	if p.B <= 0 || p.H <= 0 || p.B > 1<<20 || p.H > 1<<20 {
+		return fmt.Errorf("unplausible Bildgröße %dx%d", p.B, p.H)
+	}
 	tmp := pfad + ".tmp"
 	f, err := os.Create(tmp)
 	if err != nil {
