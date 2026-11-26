@@ -1,5 +1,10 @@
 # Captr
 
+[![prüfen](https://github.com/Dschonas04/captr/actions/workflows/pruefen.yml/badge.svg)](https://github.com/Dschonas04/captr/actions/workflows/pruefen.yml)
+[![Release](https://img.shields.io/github/v/release/Dschonas04/captr?label=Version)](https://github.com/Dschonas04/captr/releases/latest)
+[![Go 1.27](https://img.shields.io/badge/Go-1.27-00ADD8)](https://go.dev)
+[![Lizenz: Apache 2.0](https://img.shields.io/badge/Lizenz-Apache%202.0-blue.svg)](LICENSE)
+
 <img src="docs/logo.svg" alt="" width="96" align="right">
 
 Fotos sammeln, entwickeln und zusammensetzen, im Browser, auf dem eigenen
