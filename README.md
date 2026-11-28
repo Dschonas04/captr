@@ -10,6 +10,16 @@
 Fotos sammeln, entwickeln und zusammensetzen, im Browser, auf dem eigenen
 Server. Ähnlich wie Lightroom, nur ohne Abo und ohne Cloud.
 
+![Captr in einer halben Minute: Fotos in der Bibliothek auswählen, eines entwickeln, Vorher und Nachher vergleichen und eine Vorgabe anwenden](docs/bilder/rundgang.gif)
+
+*Eine halbe Minute: in der Bibliothek blättern, ein Foto öffnen, Weißabgleich,
+Kontrast, Tiefen und Dynamik ziehen, Vorher/Nachher und die Vorgabe „Film“.*
+
+| Bibliothek | Entwickeln | Vorgaben |
+| --- | --- | --- |
+| ![Bibliothek mit Raster, Sternen, Farbetiketten, Histogramm und Filmstreifen](docs/bilder/bibliothek.png) | ![Entwickeln mit Reglern für Weißabgleich, Ton und Präsenz und dem Protokoll](docs/bilder/entwickeln.png) | ![Ein Foto mit der Vorgabe Schwarzweiß hart](docs/bilder/vorgabe.png) |
+| Sterne, Farbetiketten, Filter und Filmstreifen. | Jeder Regler wirkt sofort, das Original bleibt unberührt. | Vorgaben mit einem Klick, eigene dazu. |
+
 - **Bibliothek**: RAW (CR2, CR3, NEF, ARW, DNG, RAF, ORF, RW2 und viele mehr),
   JPEG, PNG, TIFF, WebP und HEIC hineinziehen. Sterne, Markierungen,
   Farbetiketten, Filter, Aufnahmedaten.
